@@ -1,0 +1,32 @@
+{
+  "servers": ["web", "app", "db", "storage", "backup"],
+  "connections": [
+    ["web", "app"],
+    ["app", "db"],
+    ["db", "storage"],
+    ["storage", "backup"],
+    ["app", "storage"]
+  ],
+  "open_ports": {
+    "web": [80, 443, 22],
+    "app": [8080, 22],
+    "db": [3306],
+    "storage": [22],
+    "backup": []
+  },
+  "permissions": {
+    "web": "low",
+    "app": "medium",
+    "db": "high",
+    "storage": "high",
+    "backup": "high"
+  },
+  "asset_value": {
+    "web": 3,
+    "app": 5,
+    "db": 8,
+    "storage": 9,
+    "backup": 10
+  },
+  "public_facing": ["web"]
+}
