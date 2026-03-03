@@ -7,15 +7,45 @@ interface Props {
 }
 
 const SEVERITY_STYLES: Record<string, { bg: string; text: string; border: string }> = {
-  Low: { bg: "rgba(46,204,113,0.12)", text: "#2ecc71", border: "rgba(46,204,113,0.3)" },
-  Medium: { bg: "rgba(243,156,18,0.12)", text: "#f39c12", border: "rgba(243,156,18,0.3)" },
-  High: { bg: "rgba(231,76,60,0.12)", text: "#e74c3c", border: "rgba(231,76,60,0.3)" },
-  Critical: { bg: "rgba(142,68,173,0.12)", text: "#8e44ad", border: "rgba(142,68,173,0.3)" },
+  Low:      { bg: "rgba(46,204,113,0.12)",  text: "#2ecc71", border: "rgba(46,204,113,0.3)"  },
+  Medium:   { bg: "rgba(243,156,18,0.12)",  text: "#f39c12", border: "rgba(243,156,18,0.3)"  },
+  High:     { bg: "rgba(231,76,60,0.12)",   text: "#e74c3c", border: "rgba(231,76,60,0.3)"   },
+  Critical: { bg: "rgba(142,68,173,0.12)",  text: "#8e44ad", border: "rgba(142,68,173,0.3)"  },
 };
 
+function ConfidenceBar({ score, color }: { score: number; color: string }) {
+  return (
+    <div style={{ marginTop: "6px" }}>
+      <div
+        style={{
+          background: "#0d1117",
+          borderRadius: "4px",
+          height: "5px",
+          overflow: "hidden",
+          border: "1px solid #30363d",
+        }}
+      >
+        <div
+          style={{
+            width: `${score}%`,
+            height: "100%",
+            background: color,
+            borderRadius: "4px",
+            transition: "width 0.6s ease",
+            boxShadow: `0 0 6px ${color}88`,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function MetricsRow({ result }: Props) {
-  const sev = result.severity;
+  const sev      = result.severity;
   const sevStyle = SEVERITY_STYLES[sev] ?? SEVERITY_STYLES.Low;
+  const conf     = result.confidence_score ?? 0;
+  const confColor = result.confidence_color ?? "#f39c12";
+  const confLabel = result.confidence_label ?? "Unknown";
 
   const metrics = [
     {
@@ -45,6 +75,14 @@ export default function MetricsRow({ result }: Props) {
       ),
       color: sevStyle.text,
       sub: null,
+      extra: null,
+    },
+    {
+      label: "Confidence",
+      value: `${conf}%`,
+      color: confColor,
+      sub: confLabel,
+      extra: <ConfidenceBar score={conf} color={confColor} />,
     },
     {
       label: "Breach Time",
@@ -54,7 +92,7 @@ export default function MetricsRow({ result }: Props) {
     },
     {
       label: "Attack Hops",
-      value: result.attack_path.length,
+      value: result.primary_attack_path?.length ?? result.attack_path?.length ?? 0,
       color: "#e6edf3",
       sub: `${result.entry_point} → ${result.target}`,
     },
@@ -64,7 +102,7 @@ export default function MetricsRow({ result }: Props) {
     <div
       style={{
         display: "grid",
-        gridTemplateColumns: "repeat(4, 1fr)",
+        gridTemplateColumns: "repeat(5, 1fr)",
         gap: "12px",
         marginBottom: "24px",
       }}
@@ -82,7 +120,7 @@ export default function MetricsRow({ result }: Props) {
         >
           <div
             style={{
-              fontSize: "11px",
+              fontSize: "10px",
               textTransform: "uppercase",
               letterSpacing: "1px",
               color: "#8b949e",
@@ -93,7 +131,7 @@ export default function MetricsRow({ result }: Props) {
           </div>
           <div
             style={{
-              fontSize: "26px",
+              fontSize: typeof m.value === "string" && m.value.length > 8 ? "16px" : "24px",
               fontWeight: 700,
               color: m.color,
               lineHeight: 1.2,
@@ -102,10 +140,11 @@ export default function MetricsRow({ result }: Props) {
             {m.value}
           </div>
           {m.sub && (
-            <div style={{ fontSize: "11px", color: "#484f58", marginTop: "4px" }}>
+            <div style={{ fontSize: "10px", color: "#484f58", marginTop: "4px" }}>
               {m.sub}
             </div>
           )}
+          {"extra" in m && m.extra}
         </div>
       ))}
     </div>

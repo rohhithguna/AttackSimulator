@@ -13,22 +13,28 @@ export async function POST(req: NextRequest) {
   const projectDir = path.join(process.cwd(), "project");
   const scriptPath = path.join(projectDir, "run_simulation.py");
 
-  const result = await new Promise<string>((resolve, reject) => {
+  const result = await runPython(scriptPath, projectDir, { architecture, openai_key: openai_key || "" });
+
+  try {
+    const parsed = JSON.parse(result as string);
+    return NextResponse.json(parsed);
+  } catch {
+    return NextResponse.json({ error: "Failed to parse simulation output", raw: result }, { status: 500 });
+  }
+}
+
+function runPython(scriptPath: string, cwd: string, payload: object): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
     const py = spawn("python3", [scriptPath], {
-      cwd: projectDir,
-      env: { ...process.env, PYTHONPATH: projectDir },
+      cwd,
+      env: { ...process.env, PYTHONPATH: cwd },
     });
 
     let stdout = "";
     let stderr = "";
 
-    py.stdout.on("data", (data: Buffer) => {
-      stdout += data.toString();
-    });
-
-    py.stderr.on("data", (data: Buffer) => {
-      stderr += data.toString();
-    });
+    py.stdout.on("data", (data: Buffer) => { stdout += data.toString(); });
+    py.stderr.on("data", (data: Buffer) => { stderr += data.toString(); });
 
     py.on("close", (code: number) => {
       if (code !== 0) {
@@ -38,21 +44,9 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    py.on("error", (err: Error) => {
-      reject(err);
-    });
+    py.on("error", (err: Error) => { reject(err); });
 
-    // Send input
-    py.stdin.write(JSON.stringify({ architecture, openai_key: openai_key || "" }));
+    py.stdin.write(JSON.stringify(payload));
     py.stdin.end();
-  }).catch((err) => {
-    return JSON.stringify({ error: err.message });
-  });
-
-  try {
-    const parsed = JSON.parse(result as string);
-    return NextResponse.json(parsed);
-  } catch {
-    return NextResponse.json({ error: "Failed to parse simulation output", raw: result }, { status: 500 });
-  }
+  }).catch((err) => JSON.stringify({ error: err.message }));
 }

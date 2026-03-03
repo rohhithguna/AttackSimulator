@@ -6,22 +6,26 @@ import type { GraphNode, GraphEdge } from "@/lib/types";
 interface Props {
   nodes: GraphNode[];
   edges: GraphEdge[];
-  attackPath: string[];
+  attackPath: string[];        // primary path
+  secondaryPath?: string[];    // secondary path (optional)
+  activePath?: "primary" | "secondary";
   entryPoint: string | null;
   target: string | null;
 }
 
 const NODE_COLORS = {
-  entry: "#e74c3c",
-  target: "#8e44ad",
-  on_path: "#f39c12",
-  public: "#e67e22",
-  default: "#2c3e50",
+  entry:    "#e74c3c",
+  target:   "#8e44ad",
+  on_path:  "#f39c12",
+  secondary_path: "#3498db",
+  public:   "#e67e22",
+  default:  "#2c3e50",
 };
 
 const EDGE_COLORS = {
-  attack: "#e74c3c",
-  default: "#4a5568",
+  attack:    "#e74c3c",
+  secondary: "#3498db",
+  default:   "#4a5568",
 };
 
 interface LayoutNode extends GraphNode {
@@ -132,21 +136,14 @@ function drawArrow(
   ctx.lineTo(endX, endY);
   ctx.stroke();
 
-  // Arrowhead
-  const headLen = 12;
+  const headLen   = 12;
   const headAngle = Math.PI / 6;
-  const angle = Math.atan2(dy, dx);
+  const angle     = Math.atan2(dy, dx);
   ctx.beginPath();
   ctx.moveTo(endX, endY);
-  ctx.lineTo(
-    endX - headLen * Math.cos(angle - headAngle),
-    endY - headLen * Math.sin(angle - headAngle)
-  );
+  ctx.lineTo(endX - headLen * Math.cos(angle - headAngle), endY - headLen * Math.sin(angle - headAngle));
   ctx.moveTo(endX, endY);
-  ctx.lineTo(
-    endX - headLen * Math.cos(angle + headAngle),
-    endY - headLen * Math.sin(angle + headAngle)
-  );
+  ctx.lineTo(endX - headLen * Math.cos(angle + headAngle), endY - headLen * Math.sin(angle + headAngle));
   ctx.stroke();
 }
 
@@ -154,14 +151,28 @@ export default function AttackGraph({
   nodes,
   edges,
   attackPath,
+  secondaryPath = [],
+  activePath = "primary",
   entryPoint,
   target,
 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const pathSet = new Set(attackPath);
-  const attackEdgeSet = new Set(
+
+  const primarySet   = new Set(attackPath);
+  const secondarySet = new Set(secondaryPath);
+
+  const primaryEdgeSet = new Set(
     attackPath.slice(0, -1).map((n, i) => `${n}→${attackPath[i + 1]}`)
   );
+  const secondaryEdgeSet = new Set(
+    secondaryPath.slice(0, -1).map((n, i) => `${n}→${secondaryPath[i + 1]}`)
+  );
+
+  // Active display sets
+  const activePathSet  = activePath === "primary" ? primarySet   : secondarySet;
+  const activeEdgeSet  = activePath === "primary" ? primaryEdgeSet : secondaryEdgeSet;
+  const inactivePathSet = activePath === "primary" ? secondarySet : primarySet;
+  const inactiveEdgeSet = activePath === "primary" ? secondaryEdgeSet : primaryEdgeSet;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -172,53 +183,73 @@ export default function AttackGraph({
     const W = canvas.width;
     const H = canvas.height;
 
-    const laid = springLayout(nodes, edges, W, H);
+    const laid   = springLayout(nodes, edges, W, H);
     const posMap: Record<string, { x: number; y: number }> = {};
     laid.forEach((n) => (posMap[n.id] = { x: n.x, y: n.y }));
 
     ctx.clearRect(0, 0, W, H);
-
-    // Background
     ctx.fillStyle = "#0d1117";
     ctx.fillRect(0, 0, W, H);
 
-    // Draw edges
+    // ── Draw edges ──────────────────────────────────────────────────────────
     for (const edge of edges) {
       const s = posMap[edge.source];
       const t = posMap[edge.target];
       if (!s || !t) continue;
 
-      const isAttack = attackEdgeSet.has(`${edge.source}→${edge.target}`);
-      ctx.strokeStyle = isAttack ? EDGE_COLORS.attack : EDGE_COLORS.default;
-      ctx.lineWidth = isAttack ? 2.5 : 1.2;
+      const key       = `${edge.source}→${edge.target}`;
+      const isActive  = activeEdgeSet.has(key);
+      const isInactive = inactiveEdgeSet.has(key);
 
-      if (!isAttack) {
-        ctx.setLineDash([4, 4]);
-      } else {
+      if (isActive) {
+        ctx.strokeStyle = activePath === "primary" ? EDGE_COLORS.attack : EDGE_COLORS.secondary;
+        ctx.lineWidth   = 2.5;
         ctx.setLineDash([]);
+      } else if (isInactive) {
+        // Show other path faintly
+        ctx.strokeStyle = activePath === "primary"
+          ? `${EDGE_COLORS.secondary}55`
+          : `${EDGE_COLORS.attack}55`;
+        ctx.lineWidth   = 1.2;
+        ctx.setLineDash([3, 5]);
+      } else {
+        ctx.strokeStyle = EDGE_COLORS.default;
+        ctx.lineWidth   = 1.0;
+        ctx.setLineDash([4, 4]);
       }
 
-      drawArrow(ctx, s.x, s.y, t.x, t.y, 20);
+      drawArrow(ctx, s.x, s.y, t.x, t.y, 22);
       ctx.setLineDash([]);
     }
 
-    // Draw nodes
+    // ── Draw nodes ──────────────────────────────────────────────────────────
     const nodeR = 22;
     for (const node of laid) {
       const pos = posMap[node.id];
-
       let color = NODE_COLORS.default;
-      if (node.id === entryPoint) color = NODE_COLORS.entry;
-      else if (node.id === target) color = NODE_COLORS.target;
-      else if (pathSet.has(node.id)) color = NODE_COLORS.on_path;
-      else if (node.public_facing) color = NODE_COLORS.public;
 
-      // Glow for path nodes
-      if (node.id === entryPoint || node.id === target || pathSet.has(node.id)) {
+      if (node.id === entryPoint) {
+        color = NODE_COLORS.entry;
+      } else if (node.id === target) {
+        color = NODE_COLORS.target;
+      } else if (activePathSet.has(node.id)) {
+        color = activePath === "primary" ? NODE_COLORS.on_path : NODE_COLORS.secondary_path;
+      } else if (inactivePathSet.has(node.id)) {
+        // Dim the inactive path nodes
+        color = activePath === "primary"
+          ? `${NODE_COLORS.secondary_path}66`
+          : `${NODE_COLORS.on_path}66`;
+      } else if (node.public_facing) {
+        color = NODE_COLORS.public;
+      }
+
+      // Glow for active path nodes
+      const isHighlighted = node.id === entryPoint || node.id === target || activePathSet.has(node.id);
+      if (isHighlighted) {
         ctx.shadowColor = color;
-        ctx.shadowBlur = 18;
+        ctx.shadowBlur  = 20;
       } else {
-        ctx.shadowBlur = 0;
+        ctx.shadowBlur  = 0;
       }
 
       ctx.fillStyle = color;
@@ -226,53 +257,57 @@ export default function AttackGraph({
       ctx.arc(pos.x, pos.y, nodeR, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.shadowBlur = 0;
-      ctx.strokeStyle = "#ecf0f1";
-      ctx.lineWidth = 1.5;
+      ctx.shadowBlur  = 0;
+      ctx.strokeStyle = isHighlighted ? "#ecf0f1" : "#4a5568";
+      ctx.lineWidth   = isHighlighted ? 1.8 : 1.0;
       ctx.beginPath();
       ctx.arc(pos.x, pos.y, nodeR, 0, Math.PI * 2);
       ctx.stroke();
 
       // Label
       ctx.fillStyle = "#ecf0f1";
-      ctx.font = "bold 12px ui-monospace, monospace";
+      ctx.font      = "bold 11px ui-monospace, monospace";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(node.id, pos.x, pos.y);
 
       // Sub-label (asset value)
       ctx.fillStyle = "#8b949e";
-      ctx.font = "10px ui-sans-serif, sans-serif";
+      ctx.font      = "10px ui-sans-serif, sans-serif";
       ctx.fillText(`v:${node.asset_value}`, pos.x, pos.y + nodeR + 12);
     }
 
-    // Legend
+    // ── Legend ──────────────────────────────────────────────────────────────
     const legendItems = [
-      { label: "Entry Point", color: NODE_COLORS.entry },
-      { label: "Exfil Target", color: NODE_COLORS.target },
-      { label: "Attack Path", color: NODE_COLORS.on_path },
-      { label: "Untouched", color: NODE_COLORS.default },
+      { label: "Entry Point",     color: NODE_COLORS.entry      },
+      { label: "Exfil Target",    color: NODE_COLORS.target     },
+      { label: "Primary Path",    color: NODE_COLORS.on_path    },
+      { label: "Secondary Path",  color: NODE_COLORS.secondary_path },
+      { label: "Untouched",       color: NODE_COLORS.default    },
     ];
-    ctx.font = "11px ui-sans-serif, sans-serif";
-    let lx = 16;
+    ctx.font = "10px ui-sans-serif, sans-serif";
+    let lx = 14;
     for (const item of legendItems) {
-      ctx.fillStyle = item.color;
+      ctx.fillStyle    = item.color;
+      ctx.shadowBlur   = 0;
       ctx.beginPath();
-      ctx.arc(lx + 6, H - 18, 5, 0, Math.PI * 2);
+      ctx.arc(lx + 5, H - 16, 4, 0, Math.PI * 2);
       ctx.fill();
-      ctx.fillStyle = "#8b949e";
-      ctx.textAlign = "left";
+      ctx.fillStyle    = "#8b949e";
+      ctx.textAlign    = "left";
       ctx.textBaseline = "middle";
-      ctx.fillText(item.label, lx + 16, H - 18);
-      lx += ctx.measureText(item.label).width + 36;
+      ctx.fillText(item.label, lx + 14, H - 16);
+      lx += ctx.measureText(item.label).width + 30;
     }
-  }, [nodes, edges, attackPath, entryPoint, target, pathSet, attackEdgeSet]);
+  }, [nodes, edges, attackPath, secondaryPath, activePath, entryPoint, target,
+      primarySet, secondarySet, primaryEdgeSet, secondaryEdgeSet,
+      activePathSet, activeEdgeSet, inactivePathSet, inactiveEdgeSet]);
 
   return (
     <canvas
       ref={canvasRef}
       width={760}
-      height={360}
+      height={380}
       style={{ width: "100%", height: "auto", borderRadius: "8px" }}
     />
   );

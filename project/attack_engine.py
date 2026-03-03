@@ -7,7 +7,8 @@ Implements:
   3. Lateral movement (graph traversal toward high-value targets)
   4. Data exfiltration (highest asset_value node)
   5. Vulnerability chain construction
-  6. Loop prevention
+  6. Loop prevention via nx.all_simple_paths (cutoff=12)
+  7. Dual path generation — primary (max risk) + secondary (second-best)
 """
 
 import networkx as nx
@@ -39,13 +40,17 @@ def simulate_attack(G: nx.DiGraph, arch: dict) -> dict:
     """
     Run the full attack simulation on graph G.
 
+    Returns primary path + secondary path (if one exists).
+
     Returns:
         {
-            "attack_path"         : list[str],          # ordered node sequence
-            "attack_steps"        : list[dict],         # step details per node
-            "vulnerability_chain" : list[str],          # ordered vulnerability labels
-            "entry_point"         : str,
-            "target"              : str,
+            "attack_path"            : list[str],   # primary path (highest risk)
+            "secondary_attack_path"  : list[str],   # second-best path (or [])
+            "attack_steps"           : list[dict],  # step details per node (primary)
+            "vulnerability_chain"    : list[str],   # ordered vulnerability labels (primary)
+            "entry_point"            : str,
+            "target"                 : str,
+            "path_count"             : int,         # total simple paths found
         }
     """
     entry_points = get_entry_points(G)
@@ -60,20 +65,25 @@ def simulate_attack(G: nx.DiGraph, arch: dict) -> dict:
         key=lambda n: G.nodes[n].get("exposure_score", 0)
     )
 
-    # Find best path from entry to target
-    path = _find_best_path(G, entry, target)
+    # Find all ranked paths
+    ranked = _find_ranked_paths(G, entry, target)
 
-    if not path:
+    if not ranked:
         return _empty_result(f"No reachable path from '{entry}' to '{target}'.")
 
-    attack_steps, vuln_chain = _build_chain(G, path)
+    primary_path   = ranked[0]
+    secondary_path = ranked[1] if len(ranked) > 1 else []
+
+    attack_steps, vuln_chain = _build_chain(G, primary_path)
 
     return {
-        "attack_path"        : path,
-        "attack_steps"       : attack_steps,
-        "vulnerability_chain": vuln_chain,
-        "entry_point"        : entry,
-        "target"             : target,
+        "attack_path"           : primary_path,
+        "secondary_attack_path" : secondary_path,
+        "attack_steps"          : attack_steps,
+        "vulnerability_chain"   : vuln_chain,
+        "entry_point"           : entry,
+        "target"                : target,
+        "path_count"            : len(ranked),
     }
 
 
@@ -81,29 +91,38 @@ def simulate_attack(G: nx.DiGraph, arch: dict) -> dict:
 # Path-finding
 # ---------------------------------------------------------------------------
 
-def _find_best_path(G: nx.DiGraph, entry: str, target: str) -> list[str]:
+def _find_ranked_paths(G: nx.DiGraph, entry: str, target: str) -> list[list[str]]:
     """
-    Find the path from entry to target that maximises total asset_value traversed.
-    Falls back to shortest path if no weighted path exists.
-    Prevents infinite loops via visited set.
+    Explore all simple paths from entry to target (cutoff 12 to prevent explosion).
+    Rank by cumulative asset_value × exposure contribution (highest = most dangerous).
+
+    Returns list of paths sorted descending by risk score.
+    No infinite loops — nx.all_simple_paths guarantees simple (no-repeat) paths.
     """
     if entry == target:
-        return [entry]
+        return [[entry]]
 
-    # Try all simple paths and pick the one with maximum cumulative asset value
     try:
-        all_paths = list(nx.all_simple_paths(G, source=entry, target=target, cutoff=10))
+        all_paths = list(nx.all_simple_paths(G, source=entry, target=target, cutoff=12))
     except (nx.NetworkXNoPath, nx.NodeNotFound):
         return []
 
     if not all_paths:
         return []
 
-    def path_score(path):
-        return sum(G.nodes[n].get("asset_value", 0) for n in path)
+    def path_risk(path: list[str]) -> float:
+        """
+        Score a path by:
+          sum(asset_value) * avg(exposure_score) * max(privilege_weight)
+        Higher = more dangerous / higher attacker motivation.
+        """
+        asset_sum   = sum(G.nodes[n].get("asset_value", 1) for n in path)
+        avg_exp     = sum(G.nodes[n].get("exposure_score", 0.1) for n in path) / len(path)
+        max_priv    = max(G.nodes[n].get("privilege_weight", 1.0) for n in path)
+        return asset_sum * avg_exp * max_priv
 
-    best = max(all_paths, key=path_score)
-    return best
+    ranked = sorted(all_paths, key=path_risk, reverse=True)
+    return ranked
 
 
 # ---------------------------------------------------------------------------
@@ -146,12 +165,12 @@ def _build_chain(G: nx.DiGraph, path: list[str]) -> tuple[list[dict], list[str]]
                 vulns.append(VULN_PRIV_ESC_LOW)
 
         steps.append({
-            "node"      : node,
-            "step_type" : step_type,
-            "vulns"     : vulns,
-            "permission": perm,
+            "node"       : node,
+            "step_type"  : step_type,
+            "vulns"      : vulns,
+            "permission" : perm,
             "asset_value": asset_val,
-            "ports"     : ports,
+            "ports"      : ports,
         })
 
         for v in vulns:
@@ -191,10 +210,12 @@ def _inject_priv_esc(steps: list[dict], vuln_chain: list[str]) -> None:
 
 def _empty_result(reason: str) -> dict:
     return {
-        "attack_path"        : [],
-        "attack_steps"       : [],
-        "vulnerability_chain": [],
-        "entry_point"        : None,
-        "target"             : None,
-        "error"              : reason,
+        "attack_path"           : [],
+        "secondary_attack_path" : [],
+        "attack_steps"          : [],
+        "vulnerability_chain"   : [],
+        "entry_point"           : None,
+        "target"                : None,
+        "path_count"            : 0,
+        "error"                 : reason,
     }
