@@ -4,16 +4,27 @@ import path from "path";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { architecture, openai_key } = body;
+  const { architecture, openai_key, attacker_skill, harden_node } = body;
 
-  if (!architecture) {
-    return NextResponse.json({ error: "Missing architecture field" }, { status: 400 });
-  }
+    if (!architecture) {
+      return NextResponse.json({ error: "Missing architecture field" }, { status: 400 });
+    }
 
-  const projectDir = path.join(process.cwd(), "project");
-  const scriptPath = path.join(projectDir, "run_simulation.py");
+    // Adjusting backendDir to look outside frontend/ if we're in it.
+    // Assuming process.cwd() is /frontend
+    const isFrontendDir = process.cwd().endsWith("/frontend") || process.cwd().endsWith("\\frontend");
+    const baseProjectDir = isFrontendDir ? path.join(process.cwd(), "..") : process.cwd();
+    const backendDir = path.join(baseProjectDir, "backend");
+    const scriptPath = path.join(backendDir, "main.py");
 
-  const result = await runPython(scriptPath, projectDir, { architecture, openai_key: openai_key || "" });
+    const result = await runPython(scriptPath, backendDir, { 
+      architecture, 
+      openai_key: openai_key || "",
+      attacker_skill: attacker_skill || 1.0,
+      harden_node: harden_node || null
+    });
+
+
 
   try {
     const parsed = JSON.parse(result as string);
@@ -25,7 +36,10 @@ export async function POST(req: NextRequest) {
 
 function runPython(scriptPath: string, cwd: string, payload: object): Promise<string> {
   return new Promise<string>((resolve, reject) => {
-    const py = spawn("python3", [scriptPath], {
+    // Try 'python' first (common on Windows), then 'python3'
+    const command = process.platform === "win32" ? "python" : "python3";
+    
+    const py = spawn(command, [scriptPath], {
       cwd,
       env: { ...process.env, PYTHONPATH: cwd },
     });

@@ -123,6 +123,18 @@ def calculate_confidence(
     score -= priv_penalty
     factors["privilege_escalation_penalty"] = -priv_penalty
 
+    # ── Exploit Realism Bonus (Stage 3) ───────────────────────────────────────
+    # If the path probability is high, confidence in the breach increases
+    from analysis.probability import compute_path_probability
+    path_prob = compute_path_probability(G, path)
+
+    if path_prob >= 0.7:
+        score += 8
+        factors["exploit_realism_bonus"] = +8
+    elif path_prob < 0.2:
+        score -= 5
+        factors["exploit_difficulty_penalty"] = -5
+    
     # ── Clamp to [10, 97] ─────────────────────────────────────────────────────
     final = max(10, min(97, score))
     factors["final"] = final

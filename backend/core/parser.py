@@ -5,6 +5,8 @@ parser.py — Validates and parses incoming JSON architecture input.
 import json
 from typing import Any
 
+from core.config_loader import get_config
+
 REQUIRED_FIELDS = ["servers", "connections", "open_ports", "permissions", "asset_value", "public_facing"]
 VALID_PERMISSIONS = {"low", "medium", "high"}
 
@@ -18,6 +20,10 @@ def parse_input(raw: str | dict) -> dict:
     Accept a JSON string or dict, validate structure, and return a clean architecture dict.
     Raises ParseError on invalid input.
     """
+    config = get_config()
+    max_nodes = config.get("simulation", {}).get("max_nodes", 1000)
+    max_edges = config.get("simulation", {}).get("max_edges", 5000)
+
     if isinstance(raw, str):
         try:
             data = json.loads(raw)
@@ -27,6 +33,12 @@ def parse_input(raw: str | dict) -> dict:
         data = raw
     else:
         raise ParseError("Input must be a JSON string or dict.")
+
+    # Step 5: Performance Guards
+    if "servers" in data and len(data["servers"]) > max_nodes:
+        raise ParseError(f"Maximum node limit exceeded: {len(data['servers'])} > {max_nodes}")
+    if "connections" in data and len(data["connections"]) > max_edges:
+        raise ParseError(f"Maximum edge limit exceeded: {len(data['connections'])} > {max_edges}")
 
     for field in REQUIRED_FIELDS:
         if field not in data:

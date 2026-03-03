@@ -10,7 +10,7 @@ Time model (minutes per step type):
 Each node on the path contributes based on its primary step type.
 """
 
-from attack_engine import STEP_EXPLOIT, STEP_PRIV_ESC, STEP_LATERAL, STEP_EXFILTRATION
+from core.attack_engine import STEP_EXPLOIT, STEP_PRIV_ESC, STEP_LATERAL, STEP_EXFILTRATION
 
 
 # ---------------------------------------------------------------------------

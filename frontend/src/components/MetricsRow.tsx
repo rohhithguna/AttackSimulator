@@ -86,9 +86,9 @@ export default function MetricsRow({ result }: Props) {
     },
     {
       label: "Breach Time",
-      value: result.breach_time.display,
+      value: result.breach_time_data.display,
       color: "#58a6ff",
-      sub: `${result.breach_time.total_minutes} min total`,
+      sub: `${result.breach_time_data.total_minutes} min total`,
     },
     {
       label: "Attack Hops",

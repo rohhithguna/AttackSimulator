@@ -5,33 +5,34 @@ Each node carries attributes used by the attack engine and scoring module.
 
 import networkx as nx
 from typing import Any
+from core.config_loader import get_config
 
 
 def build_graph(arch: dict) -> nx.DiGraph:
     """
     Build a directed graph representing the infrastructure.
-
-    Node attributes:
-        - open_ports       : list[int]
-        - permission       : "low" | "medium" | "high"
-        - asset_value      : float
-        - public_facing    : bool
-        - exposure_score   : float  (derived, 0.0–1.0)
-        - privilege_weight : float  (derived, higher = easier to escalate from)
-
-    Edge attributes:
-        - weight : float (inverse of target asset_value, for path-finding)
+    Enforces performance guards from config.yaml.
     """
+    config = get_config()
+    max_nodes = config.get("simulation", {}).get("max_nodes", 1000)
+    max_edges = config.get("simulation", {}).get("max_edges", 5000)
+
+    if len(arch["servers"]) > max_nodes:
+        raise ValueError(f"Exceeded max nodes limit ({max_nodes})")
+    if len(arch["connections"]) > max_edges:
+        raise ValueError(f"Exceeded max edges limit ({max_edges})")
+
     G = nx.DiGraph()
 
     for server in arch["servers"]:
-        ports = arch["open_ports"][server]
-        perm = arch["permissions"][server]
-        asset_val = arch["asset_value"][server]
+        ports = arch["open_ports"].get(server, [])
+        perm = arch["permissions"].get(server, "medium")
+        asset_val = arch["asset_value"].get(server, 1)
         is_public = server in arch["public_facing"]
 
         exposure_score = _compute_exposure(is_public, ports)
         privilege_weight = _compute_privilege_weight(perm)
+        vulnerability_score = exposure_score * 0.8 + (0.2 if 22 in ports else 0)
 
         G.add_node(
             server,
@@ -41,13 +42,19 @@ def build_graph(arch: dict) -> nx.DiGraph:
             public_facing=is_public,
             exposure_score=exposure_score,
             privilege_weight=privilege_weight,
+            vulnerability_score=vulnerability_score,
         )
 
     for src, dst in arch["connections"]:
         # Lower weight = more attractive path (higher destination asset value)
         dst_asset = arch["asset_value"].get(dst, 1)
         edge_weight = 1.0 / (dst_asset + 0.001)
-        G.add_edge(src, dst, weight=edge_weight)
+        
+        # friction: higher means harder to traverse
+        # internal connections are generally lower friction than edge connections
+        friction = 0.5 if src in arch["public_facing"] else 0.2
+        
+        G.add_edge(src, dst, weight=edge_weight, friction=friction)
 
     return G
 
@@ -57,7 +64,12 @@ def _compute_exposure(is_public: bool, ports: list[int]) -> float:
     Exposure score in [0, 1].
     Public-facing starts at 0.6; each risky port adds weight.
     """
-    score = 0.6 if is_public else 0.1
+    config = get_config()
+    risk_weights = config.get("risk_model", {})
+    
+    base_score = risk_weights.get("exposure_weight_max", 0.6) if is_public else risk_weights.get("exposure_weight_min", 0.1)
+    score = base_score
+
     if 22 in ports:
         score += 0.2
     if 80 in ports or 443 in ports:
@@ -70,13 +82,16 @@ def _compute_exposure(is_public: bool, ports: list[int]) -> float:
 def _compute_privilege_weight(permission: str) -> float:
     """
     Privilege weight: how much risk the node's privilege level adds.
-    Low privilege = easier to escalate (attacker can exploit it); high = harder to breach but juicier.
-    Returns a risk multiplier perspective:
-        low   → 0.8  (easy target, low internal value)
-        medium→ 1.2
-        high  → 1.5  (hard to get but damaging once compromised)
     """
-    return {"low": 0.8, "medium": 1.2, "high": 1.5}.get(permission, 1.0)
+    config = get_config()
+    priv_weights = config.get("risk_model", {})
+    
+    weights = {
+        "low": priv_weights.get("privilege_weight_low", 0.8),
+        "medium": priv_weights.get("privilege_weight_medium", 1.2),
+        "high": priv_weights.get("privilege_weight_high", 1.5)
+    }
+    return weights.get(permission, 1.0)
 
 
 def get_entry_points(G: nx.DiGraph) -> list[str]:

@@ -1,0 +1,36 @@
+# AI Attack Simulation Configuration
+# Stage 4: Productization
+
+simulation:
+  max_nodes: 1000
+  max_edges: 5000
+  max_dfs_depth: 12
+  monte_carlo_iterations: 1000
+  monte_carlo_iteration_cap: 5000
+
+risk_model:
+  exposure_weight_min: 1.0
+  exposure_weight_max: 2.0
+  privilege_weight_low: 0.8
+  privilege_weight_medium: 1.2
+  privilege_weight_high: 1.5
+  depth_weight_base: 1.0
+  depth_weight_step: 0.3
+  depth_weight_max: 2.5
+
+probability_model:
+  default_cve: 0.6
+  critical_cve: 0.85
+  low_cve: 0.3
+  privilege_escalation: 0.7
+  credential_reuse: 0.9
+
+centrality_thresholds:
+  critical_node_percentage: 0.6
+
+time_estimation:
+  base_web_minutes: 30
+  base_ssh_minutes: 120
+  base_db_minutes: 90
+  base_lateral_minutes: 15
+  base_exfil_minutes: 25

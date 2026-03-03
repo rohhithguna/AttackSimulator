@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Simulation Output Schema",
+  "type": "object",
+  "properties": {
+    "primary_path": { "type": "array", "items": { "type": "string" } },
+    "secondary_paths": { "type": "array", "items": { "type": "array", "items": { "type": "string" } } },
+    "optimized_paths": {
+      "type": "object",
+      "properties": {
+        "min_friction": { "type": "array", "items": { "type": "string" } },
+        "max_damage": { "type": "array", "items": { "type": "string" } },
+        "fastest_breach": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "structural_risk": { "type": "number" },
+    "advanced_risk": { "type": "number" },
+    "breach_time": {
+      "type": "object",
+      "properties": {
+        "display": { "type": "string" },
+        "total_minutes": { "type": "integer" }
+      }
+    },
+    "exploit_probability": { "type": "number" },
+    "monte_carlo_results": {
+      "type": "object",
+      "properties": {
+        "iterations": { "type": "integer" },
+        "breach_success_rate": { "type": "number" },
+        "average_time_if_successful": { "type": "string" }
+      }
+    },
+    "choke_points": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "node": { "type": "string" },
+          "centrality_score": { "type": "number" },
+          "path_dependency_percent": { "type": "number" },
+          "risk_reduction_if_hardened": { "type": "number" },
+          "single_point_of_catastrophic_failure": { "type": "boolean" }
+        }
+      }
+    },
+    "confidence_score": { "type": "integer" },
+    "business_impact": {
+      "type": "object",
+      "properties": {
+        "data_risk": { "type": "string" },
+        "operational_risk": { "type": "string" },
+        "compliance_risk": { "type": "string" },
+        "summary_tags": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "ai_explanation": { "type": "string" },
+    "graph": {
+      "type": "object",
+      "properties": {
+        "nodes": { "type": "array" },
+        "edges": { "type": "array" }
+      }
+    }
+  }
+}

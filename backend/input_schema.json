@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Simulation Input Schema",
+  "type": "object",
+  "properties": {
+    "architecture": {
+      "type": "object",
+      "properties": {
+        "servers": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1
+        },
+        "connections": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": { "type": "string" },
+            "minItems": 2,
+            "maxItems": 2
+          }
+        },
+        "open_ports": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "integer" }
+          }
+        },
+        "permissions": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "enum": ["low", "medium", "high"]
+          }
+        },
+        "asset_value": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 10
+          }
+        },
+        "public_facing": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["servers", "connections"]
+    },
+    "openai_key": { "type": "string" },
+    "monte_carlo": { "type": "boolean", "default": true }
+  },
+  "required": ["architecture"]
+}

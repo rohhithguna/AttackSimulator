@@ -1,17 +1,15 @@
 """
 scoring.py — Risk scoring model for the attack simulation.
 
-Formula:
+Formula (Stage 2):
     risk_score = exposure_weight * privilege_weight * asset_value_weight * attack_depth_weight
 
-Severity mapping:
-    0–4   → Low
-    5–8   → Medium
-    9–12  → High
-    13+   → Critical
+Advanced Formula (Stage 3):
+    advanced_risk = (structural_risk × exploit_probability × impact_multiplier) ÷ log(time_to_breach + 1)
 """
 
 import networkx as nx
+import math
 
 
 # ---------------------------------------------------------------------------
@@ -73,6 +71,34 @@ def calculate_risk(G: nx.DiGraph, sim_result: dict) -> dict:
             "depth_weight"       : round(depth_w,     3),
         },
     }
+
+def calculate_advanced_risk(
+    structural_risk: float,
+    exploit_probability: float,
+    impact_multiplier: float,
+    time_to_breach: float
+) -> float:
+    """
+    STAGE 3 Objective 5: Advanced Risk Intelligence Layer.
+    Formula:
+        advanced_risk = (structural_risk × exploit_probability × impact_multiplier) / log(time_to_breach + 1)
+    """
+    # impact_multiplier defaults to 1.0 if not provided
+    # time_to_breach in minutes
+    
+    # structural_risk is from calculate_risk
+    # exploit_probability is from probability.py (0.0 to 1.0)
+    
+    numerator = structural_risk * exploit_probability * impact_multiplier
+    # log(time_to_breach + 1) to avoid divide by zero and handle very fast breaches
+    # we use natural log as standard in mathematical models
+    denominator = math.log(time_to_breach + 1) if time_to_breach > 0 else 1.0
+    
+    if denominator < 0.1: # safety for very small time values
+        denominator = 0.1
+        
+    adv_risk = numerator / denominator
+    return round(adv_risk, 2)
 
 
 def severity_color(severity: str) -> str:

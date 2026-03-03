@@ -54,6 +54,22 @@ const SCENARIOS: Record<string, object> = {
     asset_value: { dmz: 2, proxy: 3, app: 6, internal: 8, vault: 10 },
     public_facing: ["dmz"],
   },
+  "Critical Breach (Vulnerable)": {
+    servers: ["web", "app", "db-exposed"],
+    connections: [["web", "app"], ["app", "db-exposed"], ["web", "db-exposed"]],
+    open_ports: { web: [80, 22], app: [8080, 22], "db-exposed": [3306, 22] },
+    permissions: { web: "low", app: "medium", "db-exposed": "high" },
+    asset_value: { web: 2, app: 5, "db-exposed": 10 },
+    public_facing: ["web", "db-exposed"],
+  },
+  "Secure Architecture": {
+    servers: ["bastion", "app-private", "db-private"],
+    connections: [["bastion", "app-private"], ["app-private", "db-private"]],
+    open_ports: { bastion: [22], "app-private": [8080], "db-private": [3306] },
+    permissions: { bastion: "low", "app-private": "low", "db-private": "high" },
+    asset_value: { bastion: 1, "app-private": 4, "db-private": 10 },
+    public_facing: ["bastion"],
+  },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -189,35 +205,36 @@ function BeforeAfterPanel({
   onClear: () => void;
 }) {
   const riskDelta = delta(original.risk_score, mitigated.risk_score);
-  const timeDelta = delta(original.breach_time.total_minutes, mitigated.breach_time.total_minutes);
-  const confDelta = delta(original.confidence_score, mitigated.confidence_score);
+    const timeDelta = delta(original.breach_time_data.total_minutes, mitigated.breach_time_data.total_minutes);
+    const confDelta = delta(original.confidence_score, mitigated.confidence_score);
 
-  const col = (improved: boolean) => improved ? "#2ecc71" : "#e74c3c";
+    const col = (improved: boolean) => improved ? "#2ecc71" : "#e74c3c";
 
-  return (
-    <div style={{
-      background: "#161b22", border: "1px solid #30363d", borderRadius: "10px",
-      padding: "20px", marginBottom: "24px",
-    }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-        <div style={{ fontSize: "13px", fontWeight: 700, color: "#e6edf3",
-          textTransform: "uppercase", letterSpacing: "1px" }}>
-          Mitigation Re-Simulation — Before vs After
+    return (
+      <div style={{
+        background: "#161b22", border: "1px solid #30363d", borderRadius: "10px",
+        padding: "20px", marginBottom: "24px",
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+          <div style={{ fontSize: "13px", fontWeight: 700, color: "#e6edf3",
+            textTransform: "uppercase", letterSpacing: "1px" }}>
+            Mitigation Re-Simulation — Before vs After
+          </div>
+          <button onClick={onClear} style={{
+            background: "transparent", border: "1px solid #30363d",
+            borderRadius: "6px", padding: "4px 10px", cursor: "pointer",
+            color: "#8b949e", fontSize: "11px",
+          }}>
+            Clear
+          </button>
         </div>
-        <button onClick={onClear} style={{
-          background: "transparent", border: "1px solid #30363d",
-          borderRadius: "6px", padding: "4px 10px", cursor: "pointer",
-          color: "#8b949e", fontSize: "11px",
-        }}>
-          Clear
-        </button>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "16px" }}>
-        {[
-          { label: "Risk Score",   before: original.risk_score.toFixed(2),             after: mitigated.risk_score.toFixed(2),              d: riskDelta },
-          { label: "Breach Time",  before: original.breach_time.display,               after: mitigated.breach_time.display,                d: timeDelta },
-          { label: "Confidence",   before: `${original.confidence_score}%`,            after: `${mitigated.confidence_score}%`,             d: confDelta },
-        ].map(({ label, before, after, d }) => (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "16px" }}>
+          {[
+            { label: "Risk Score",   before: original.risk_score.toFixed(2),             after: mitigated.risk_score.toFixed(2),              d: riskDelta },
+            { label: "Breach Time",  before: original.breach_time_data.display,               after: mitigated.breach_time_data.display,                d: timeDelta },
+            { label: "Confidence",   before: `${original.confidence_score}%`,            after: `${mitigated.confidence_score}%`,             d: confDelta },
+          ].map(({ label, before, after, d }) => (
+
           <div key={label} style={{
             background: "#0d1117", border: "1px solid #30363d", borderRadius: "8px",
             padding: "14px 16px", textAlign: "center",
@@ -458,6 +475,218 @@ function applyMitigations(arch: SimulationResult["arch"], state: MitigationState
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Stage 4.5 Components
+// ─────────────────────────────────────────────────────────────────────────────
+
+function ResilienceCard({ summary }: { summary?: SimulationResult["resilience_summary"] }) {
+  if (!summary || !summary.is_resilient) return null;
+  return (
+    <div style={{
+      background: "rgba(46,204,113,0.05)", border: "1px solid #2ecc7133",
+      borderRadius: "10px", padding: "24px", marginBottom: "24px", textAlign: "center"
+    }}>
+      <div style={{ fontSize: "32px", marginBottom: "12px" }}>🛡️</div>
+      <div style={{ fontSize: "16px", fontWeight: 700, color: "#2ecc71", textTransform: "uppercase", letterSpacing: "1px" }}>
+        System Resilience Confirmed
+      </div>
+      <p style={{ color: "#8b949e", fontSize: "13px", margin: "12px 0", lineHeight: "1.6" }}>
+        {summary.reason}
+      </p>
+      <div style={{ display: "inline-block", background: "#2ecc7122", color: "#2ecc71", padding: "4px 12px", borderRadius: "20px", fontSize: "11px", fontWeight: 700 }}>
+        Confidence: {summary.confidence}%
+      </div>
+    </div>
+  );
+}
+
+function RiskBreakdownChart({ components }: { components?: SimulationResult["risk_components"] }) {
+  if (!components) return null;
+  const labels = {
+    structural_exposure: "Structural Exposure",
+    intrinsic_vulnerability: "Intrinsic Vulnerability",
+    target_proximity: "Target Proximity",
+    privilege_amplification: "Privilege Amplification"
+  };
+  const entries = Object.entries(components);
+  const total = entries.reduce((acc, [_, v]) => acc + v, 0) || 1;
+
+  return (
+    <div style={{ marginTop: "10px" }}>
+      <div style={{ height: "16px", width: "100%", background: "#30363d", borderRadius: "8px", display: "flex", overflow: "hidden" }}>
+        {entries.map(([key, val], i) => (
+          <div key={key} style={{ 
+            height: "100%", 
+            width: `${(val / total) * 100}%`, 
+            background: ["#e74c3c", "#f39c12", "#58a6ff", "#8e44ad"][i],
+            opacity: 0.8
+          }} title={`${labels[key as keyof typeof labels]}: ${val}`} />
+        ))}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginTop: "16px" }}>
+        {entries.map(([key, val], i) => (
+          <div key={key} style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
+            <span style={{ width: "10px", height: "10px", borderRadius: "2px", background: ["#e74c3c", "#f39c12", "#58a6ff", "#8e44ad"][i] }} />
+            <span style={{ color: "#8b949e" }}>{labels[key as keyof typeof labels]}</span>
+            <span style={{ marginLeft: "auto", fontWeight: 700, color: "#e6edf3" }}>{Math.round((val/total)*100)}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AttackTimelineAnimation({ timeline }: { timeline?: SimulationResult["attack_timeline"] }) {
+  if (!timeline) return null;
+  return (
+    <div style={{ position: "relative", paddingLeft: "24px", borderLeft: "2px dashed #30363d", margin: "10px 0 20px 10px" }}>
+      <style>{`
+        @keyframes fadeInSlide {
+          from { opacity: 0; transform: translateX(-10px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        .timeline-step {
+          animation: fadeInSlide 0.5s ease forwards;
+          opacity: 0;
+        }
+      `}</style>
+      {timeline.map((step, i) => (
+        <div 
+          key={i} 
+          className="timeline-step"
+          style={{ 
+            marginBottom: "20px", 
+            position: "relative",
+            animationDelay: `${i * 0.2}s`
+          }}
+        >
+          <div style={{ 
+            position: "absolute", left: "-31px", top: "0", width: "12px", height: "12px", 
+            borderRadius: "50%", background: "#e74c3c", border: "4px solid #0d1117",
+            boxShadow: "0 0 10px rgba(231,76,60,0.5)"
+          }} />
+          <div style={{ fontSize: "12px", fontWeight: 700, color: "#e6edf3" }}>Step {step.step}: {step.node}</div>
+          <div style={{ fontSize: "11px", color: "#8b949e", marginTop: "2px" }}>
+            {step.action} · <span style={{ color: "#58a6ff" }}>{step.time_delta}</span> · 
+            <span style={{ color: step.privilege_level === 'high' ? '#8e44ad' : '#2ecc71', marginLeft: "4px" }}>
+              {step.privilege_level} priv
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ClusterSummary({ clusters }: { clusters?: SimulationResult["path_clusters"] }) {
+  if (!clusters || clusters.length === 0) return null;
+  return (
+    <div style={{ display: "flex", gap: "10px", overflowX: "auto", paddingBottom: "10px", marginBottom: "16px" }}>
+      {clusters.map((c, i) => (
+        <div key={i} style={{ 
+          minWidth: "180px", background: "#161b22", border: "1px solid #30363d", 
+          borderRadius: "8px", padding: "12px", flexShrink: 0
+        }}>
+          <div style={{ fontSize: "10px", color: "#8b949e", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "4px" }}>
+            Cluster {i+1}
+          </div>
+          <div style={{ fontSize: "12px", fontWeight: 600, color: "#e6edf3", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {c.cluster_type}
+          </div>
+          <div style={{ fontSize: "11px", color: "#58a6ff", marginTop: "4px" }}>
+            {c.count} paths grouped
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SensitivityAnalysisPanel({ analysis }: { analysis?: SimulationResult["sensitivity_analysis"] }) {
+  if (!analysis || !analysis.scenarios || analysis.scenarios.length === 0) return null;
+  
+  return (
+    <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: "10px", padding: "20px", marginBottom: "24px" }}>
+      <div style={{ fontSize: "13px", fontWeight: 700, color: "#e6edf3", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "16px" }}>
+        Skill-Based Sensitivity Analysis
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
+        {analysis.scenarios.map((s, i) => (
+          <div key={i} style={{ 
+            background: "#0d1117", border: "1px solid #30363d", borderRadius: "8px", 
+            padding: "16px", textAlign: "center", position: "relative"
+          }}>
+            <div style={{ fontSize: "10px", color: "#8b949e", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px" }}>
+              {s.skill_level} Attacker
+            </div>
+            <div style={{ fontSize: "20px", fontWeight: 700, color: i === 2 ? "#e74c3c" : i === 1 ? "#f39c12" : "#2ecc71" }}>
+              Risk: {s.risk_score.toFixed(1)}
+            </div>
+            <div style={{ fontSize: "11px", color: "#484f58", marginTop: "4px" }}>
+              Prob: {(s.breach_probability * 100).toFixed(1)}%
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: "16px", fontSize: "11px", color: "#8b949e", fontStyle: "italic", textAlign: "center" }}>
+        Variance between Low vs Elite attackers: <span style={{ color: "#e6edf3", fontWeight: 600 }}>{analysis.risk_variance}</span> risk units.
+      </div>
+    </div>
+  );
+}
+
+function HardenSimulationPanel({ result, onSimulate }: { result: SimulationResult, onSimulate: (node: string) => void }) {
+  const [selectedNode, setSelectedNode] = useState("");
+  const topChokePoints = (result.choke_points || []).slice(0, 5);
+  const metrics = result.harden_metrics;
+
+  return (
+    <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: "10px", padding: "20px", marginBottom: "24px" }}>
+      <div style={{ fontSize: "13px", fontWeight: 700, color: "#e6edf3", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "16px" }}>
+        Choke Point Impact Simulation
+      </div>
+      <div style={{ display: "flex", gap: "12px", marginBottom: "20px" }}>
+        <select 
+          value={selectedNode} 
+          onChange={(e) => setSelectedNode(e.target.value)}
+          style={{ flex: 1, background: "#0d1117", border: "1px solid #30363d", borderRadius: "6px", color: "#c9d1d9", padding: "8px", fontSize: "12px" }}
+        >
+          <option value="">Select Node to Harden...</option>
+          {topChokePoints.map(cp => (
+            <option key={cp.node} value={cp.node}>{cp.node} (Choke point score: {Math.round(cp.centrality * 100)})</option>
+          ))}
+        </select>
+        <button 
+          onClick={() => selectedNode && onSimulate(selectedNode)}
+          disabled={!selectedNode}
+          style={{ 
+            background: "linear-gradient(135deg, #3498db, #2980b9)", color: "white", 
+            border: "none", borderRadius: "6px", padding: "0 20px", fontSize: "12px", fontWeight: 600,
+            cursor: selectedNode ? "pointer" : "not-allowed", opacity: selectedNode ? 1 : 0.6
+          }}
+        >
+          Simulate Hardening
+        </button>
+      </div>
+
+      {metrics && metrics.node_hardened === selectedNode && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+          <div style={{ background: "#0d1117", border: "1px solid #30363d", borderRadius: "8px", padding: "16px", textAlign: "center" }}>
+            <div style={{ fontSize: "10px", color: "#8b949e", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px" }}>Risk Reduction</div>
+            <div style={{ fontSize: "24px", fontWeight: 700, color: "#2ecc71" }}>-{metrics.risk_reduction_pct}%</div>
+            <div style={{ fontSize: "11px", color: "#484f58", marginTop: "4px" }}>{metrics.original_risk.toFixed(1)} → {metrics.new_risk.toFixed(1)}</div>
+          </div>
+          <div style={{ background: "#0d1117", border: "1px solid #30363d", borderRadius: "8px", padding: "16px", textAlign: "center" }}>
+            <div style={{ fontSize: "10px", color: "#8b949e", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px" }}>Path Collapse</div>
+            <div style={{ fontSize: "24px", fontWeight: 700, color: "#e6edf3" }}>{metrics.path_reduction_pct}%</div>
+            <div style={{ fontSize: "11px", color: "#484f58", marginTop: "4px" }}>{metrics.original_path_count} → {metrics.new_path_count} paths</div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main page
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -473,10 +702,15 @@ export default function Home() {
   const [activeTab,       setActiveTab]       = useState<"analysis" | "raw">("analysis");
   const [activePath,      setActivePath]      = useState<"primary" | "secondary">("primary");
   const [mitigState,      setMitigState]      = useState<MitigationState>({ closePorts: [], changePrivilege: [], removePublic: [] });
+  const [attackerSkill,   setAttackerSkill]   = useState(1.0);
+  const [hardenNode,      setHardenNode]      = useState<string>("");
 
-  const runSimulation = useCallback(async (overrideArch?: object) => {
+  const runSimulation = useCallback(async (overrideArch?: object, hardeningNode?: string) => {
     const isMitigation = Boolean(overrideArch);
+    const isHardening = Boolean(hardeningNode);
+    
     if (isMitigation) setMitigLoading(true);
+    else if (isHardening) setLoading(true); // Shared loading for now
     else {
       setLoading(true);
       setResult(null);
@@ -498,7 +732,12 @@ export default function Home() {
       const res = await fetch("/api/simulate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ architecture: parsed, openai_key: openaiKey }),
+        body: JSON.stringify({ 
+          architecture: parsed, 
+          openai_key: openaiKey,
+          attacker_skill: attackerSkill,
+          harden_node: hardeningNode || null
+        }),
       });
 
       const data: SimulationResult & { error?: string } = await res.json();
@@ -512,7 +751,7 @@ export default function Home() {
       if (isMitigation) setMitigLoading(false);
       else setLoading(false);
     }
-  }, [jsonInput, openaiKey]);
+  }, [jsonInput, openaiKey, attackerSkill]);
 
   const runMitigation = useCallback(() => {
     if (!result) return;
@@ -559,6 +798,25 @@ export default function Home() {
           />
           <div style={{ fontSize: "9px", color: "#484f58", marginTop: "3px" }}>
             GPT-4o for AI analysis. Falls back to rule-based.
+          </div>
+        </div>
+
+        {/* Attacker Skill Level */}
+        <div style={{ marginBottom: "20px" }}>
+          <label style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "1px",
+            color: "#8b949e", display: "block", marginBottom: "8px" }}>
+            Attacker Skill Level: <b style={{ color: "#e6edf3" }}>{attackerSkill === 0.6 ? "Low" : attackerSkill === 1.0 ? "Medium" : "Elite"}</b>
+          </label>
+          <input 
+            type="range" min="0.6" max="1.4" step="0.4" 
+            value={attackerSkill} 
+            onChange={e => setAttackerSkill(parseFloat(e.target.value))}
+            style={{ width: "100%", accentColor: "#e74c3c", cursor: "pointer" }}
+          />
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: "9px", color: "#484f58", marginTop: "4px" }}>
+            <span>0.6x</span>
+            <span>1.0x</span>
+            <span>1.4x</span>
           </div>
         </div>
 
@@ -644,20 +902,21 @@ export default function Home() {
         <div style={{ padding: "16px 28px", borderBottom: "1px solid #30363d",
           background: "#0d1117", display: "flex", alignItems: "center",
           justifyContent: "space-between", flexShrink: 0 }}>
-          <div>
-            <h1 style={{ margin: 0, fontSize: "19px", fontWeight: 700, color: "#e6edf3" }}>
-              AI Attack Simulation Agent
-            </h1>
-            <p style={{ margin: "2px 0 0", fontSize: "11px", color: "#8b949e" }}>
-              Stage 2 — Predictive Breach Intelligence Platform
-            </p>
-          </div>
-          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-            <span style={{ fontSize: "10px", background: "rgba(46,204,113,0.1)", color: "#2ecc71",
-              border: "1px solid rgba(46,204,113,0.25)", borderRadius: "20px",
-              padding: "2px 8px", letterSpacing: "1px", fontWeight: 600 }}>
-              STAGE 2
-            </span>
+            <div>
+              <h1 style={{ margin: 0, fontSize: "19px", fontWeight: 700, color: "#e6edf3" }}>
+                AI Attack Simulation Agent
+              </h1>
+              <p style={{ margin: "2px 0 0", fontSize: "11px", color: "#8b949e" }}>
+                Stage 4 — Enterprise Breach Intelligence Engine
+              </p>
+            </div>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              <span style={{ fontSize: "10px", background: "rgba(46,204,113,0.1)", color: "#2ecc71",
+                border: "1px solid rgba(46,204,113,0.25)", borderRadius: "20px",
+                padding: "2px 8px", letterSpacing: "1px", fontWeight: 600 }}>
+                STAGE 4
+              </span>
+
             <span style={{ fontSize: "10px", background: "rgba(231,76,60,0.12)", color: "#e74c3c",
               border: "1px solid rgba(231,76,60,0.25)", borderRadius: "20px",
               padding: "2px 8px", letterSpacing: "1px", fontWeight: 600 }}>
@@ -795,6 +1054,8 @@ export default function Home() {
             {/* Results */}
             {result && !loading && (
               <>
+                <ResilienceCard summary={result.resilience_summary} />
+                
                 {/* Tabs */}
                 <div style={{ display: "flex", gap: "4px", marginBottom: "20px",
                   borderBottom: "1px solid #30363d" }}>
@@ -888,19 +1149,49 @@ export default function Home() {
                       </div>
                     </div>
 
-                    {/* Attack chain */}
-                    <div style={{ marginBottom: "24px" }}>
-                      <SectionHeader>Attack Chain</SectionHeader>
-                      <AttackChain
-                        attackPath={activePath === "primary"
-                          ? (result.primary_attack_path ?? result.attack_path)
-                          : (result.secondary_attack_path ?? [])}
-                        attackSteps={result.attack_steps}
-                        vulnerabilityChain={result.vulnerability_chain}
-                      />
-                    </div>
+                      {/* Attack chain */}
+                      <div style={{ marginBottom: "24px" }}>
+                        <SectionHeader>Attack Chain</SectionHeader>
+                        <AttackChain
+                          attackPath={activePath === "primary"
+                            ? (result.primary_attack_path ?? result.attack_path)
+                            : (result.secondary_attack_path ?? [])}
+                          attackSteps={result.attack_steps}
+                          vulnerabilityChain={result.vulnerability_chain}
+                        />
+                      </div>
 
-                    {/* Business Impact */}
+                      {/* Advanced Analysis Extensions (Stage 4.5) */}
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginBottom: "24px" }}>
+                        <div>
+                          <SectionHeader>Attack Timeline</SectionHeader>
+                          <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: "10px", padding: "20px" }}>
+                            <AttackTimelineAnimation timeline={result.attack_timeline} />
+                          </div>
+                        </div>
+                        <div>
+                          <SectionHeader>Risk Distribution</SectionHeader>
+                          <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: "10px", padding: "20px" }}>
+                            <div style={{ fontSize: "12px", color: "#8b949e", marginBottom: "16px" }}>
+                              Composite risk contribution per structural vector:
+                            </div>
+                            <RiskBreakdownChart components={result.risk_components} />
+                          </div>
+                        </div>
+                      </div>
+
+                        <div style={{ marginBottom: "24px" }}>
+                          <SectionHeader>Attack Path Clustering</SectionHeader>
+                          <ClusterSummary clusters={result.path_clusters} />
+                        </div>
+
+                        <SensitivityAnalysisPanel analysis={result.sensitivity_analysis} />
+
+                        <HardenSimulationPanel result={result} onSimulate={(node) => runSimulation(undefined, node)} />
+
+
+                      {/* Business Impact */}
+
                     {result.business_impact && (
                       <div style={{ marginBottom: "24px" }}>
                         <SectionHeader>Business Impact Analysis</SectionHeader>
@@ -929,11 +1220,11 @@ export default function Home() {
                     </Expandable>
 
                     {/* Breach time breakdown */}
-                    <Expandable title={`Breach Time Breakdown — ${result.breach_time.display}`}>
+                    <Expandable title={`Breach Time Breakdown — ${result.breach_time_data.display}`}>
                       <div style={{ display: "grid",
-                        gridTemplateColumns: `repeat(${Math.min(result.breach_time.breakdown.length, 4)}, 1fr)`,
+                        gridTemplateColumns: `repeat(${Math.min(result.breach_time_data.breakdown.length, 4)}, 1fr)`,
                         gap: "10px" }}>
-                        {result.breach_time.breakdown.map(step => (
+                        {result.breach_time_data.breakdown.map(step => (
                           <div key={step.node} style={{ background: "#161b22",
                             border: "1px solid #30363d", borderRadius: "8px",
                             padding: "12px", textAlign: "center" }}>
@@ -1024,35 +1315,19 @@ export default function Home() {
                   </>
                 )}
 
-                {activeTab === "raw" && (
-                  <div>
-                    <SectionHeader>Simulation Output (Stage 2 Schema)</SectionHeader>
-                    <pre style={{ background: "#161b22", border: "1px solid #30363d",
-                      borderRadius: "8px", padding: "20px", overflow: "auto",
-                      fontSize: "11px", color: "#c9d1d9",
-                      fontFamily: "var(--font-geist-mono), monospace",
-                      lineHeight: "1.6", maxHeight: "600px" }}>
-                      {JSON.stringify({
-                        primary_attack_path:  result.primary_attack_path,
-                        secondary_attack_path: result.secondary_attack_path,
-                        vulnerability_chain:  result.vulnerability_chain,
-                        risk_score:           result.risk_score,
-                        severity:             result.severity,
-                        confidence_score:     result.confidence_score,
-                        confidence_label:     result.confidence_label,
-                        breach_time_estimate: result.breach_time.display,
-                        business_impact: {
-                          data_risk:        result.business_impact?.data_risk?.slice(0, 80) + "...",
-                          operational_risk: result.business_impact?.operational_risk?.slice(0, 80) + "...",
-                          compliance_risk:  result.business_impact?.compliance_risk?.slice(0, 80) + "...",
-                          summary_tags:     result.business_impact?.summary_tags,
-                        },
-                        mitigation:     result.ai.mitigation_roadmap || result.ai.mitigation_strategy,
-                        ai_explanation: result.ai.executive_summary,
-                      }, null, 2)}
-                    </pre>
-                  </div>
-                )}
+                  {activeTab === "raw" && (
+                    <div>
+                      <SectionHeader>Simulation Output (Unified Production Schema)</SectionHeader>
+                      <pre style={{ background: "#161b22", border: "1px solid #30363d",
+                        borderRadius: "8px", padding: "20px", overflow: "auto",
+                        fontSize: "11px", color: "#c9d1d9",
+                        fontFamily: "var(--font-geist-mono), monospace",
+                        lineHeight: "1.6", maxHeight: "600px" }}>
+                        {JSON.stringify(result, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+
               </>
             )}
           </div>
