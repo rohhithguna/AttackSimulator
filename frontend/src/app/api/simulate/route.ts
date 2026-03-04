@@ -34,11 +34,11 @@ export async function POST(req: NextRequest) {
   }
 }
 
-function runPython(scriptPath: string, cwd: string, payload: object): Promise<string> {
-  return new Promise<string>((resolve, reject) => {
-    // Use venv python if available, otherwise fall back to system python
-    const venvPython = path.join(cwd, "venv", "bin", "python3");
-    const command = process.platform === "win32" ? "python" : venvPython;
+  function runPython(scriptPath: string, cwd: string, payload: object): Promise<string> {
+    return new Promise<string>((resolve, reject) => {
+      // Use venv python if available, otherwise fall back to system python
+      const venvPython = path.join(cwd, "..", ".venv", "bin", "python3");
+      const command = process.platform === "win32" ? "python" : venvPython;
 
     const py = spawn(command, [scriptPath], {
       cwd,
