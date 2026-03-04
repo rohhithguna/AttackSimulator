@@ -28,7 +28,7 @@ from analysis.confidence      import calculate_confidence
 from analysis.business_impact import compute_business_impact
 from analysis.ai_explainer    import explain_attack
 from analysis.centrality      import analyze_choke_points
-from analysis.probability     import compute_path_probability, compute_overall_breach_probability
+from analysis.probability     import compute_path_probability, compute_overall_breach_probability, collect_vulnerability_intelligence
 from analysis.monte_carlo     import run_monte_carlo
 from analysis.analysis_extensions import (
     generate_attack_timeline, 
@@ -37,6 +37,13 @@ from analysis.analysis_extensions import (
     simulate_node_hardening,
     perform_sensitivity_analysis
 )
+
+# Stage 4 Integrations
+from historical_validation import HistoricalValidator
+from defender_prioritization import DefenderPrioritization
+
+# Stage 6 Integration
+from rl_attacker import train_rl_agent, simulate_rl_path, compare_rl_vs_deterministic
 
 VERSION = "1.0.0-production"
 
@@ -193,12 +200,47 @@ def run_simulation_logic(
         business_impact     = biz_result,
     )
 
-    # 7. Final Output Assembly
+    # 7. Stage 4: Historical Validation & Defender Prioritization
+    val_score, val_incident = HistoricalValidator().validate_path(sim_result["attack_path"])
+    defender_prioritizer = DefenderPrioritization(G, all_paths)
+    recommendations = defender_prioritizer.get_recommendations(top_n=5)
+
+    # 7.5 RL Attacker (Stage 6)
+    rl_attacker_data = {
+        "rl_attack_path": [],
+        "expected_reward": 0.0,
+        "rl_vs_deterministic": "RL simulation not executed."
+    }
+    
+    try:
+        # Use existing entry point and target for RL training
+        rl_agent = train_rl_agent(G, [sim_result["entry_point"]], sim_result["target"], episodes=1000)
+        rl_res = simulate_rl_path(rl_agent, sim_result["entry_point"], sim_result["target"])
+        rl_attacker_data = {
+            "rl_attack_path": rl_res["path"],
+            "expected_reward": rl_res["reward"],
+            "rl_vs_deterministic": compare_rl_vs_deterministic(rl_res["path"], sim_result["attack_path"])
+        }
+    except Exception as e:
+        rl_attacker_data["rl_vs_deterministic"] = f"RL simulation failed: {str(e)}"
+
+    # 8. Final Output Assembly
     return {
         "status": "success",
         "request_id": request_id,
         "execution_time": round(time.perf_counter() - start_time_perf, 4),
         "version": VERSION,
+
+        # Stage 6 RL Results
+        "rl_attacker": rl_attacker_data,
+        "rl_attack_path": rl_attacker_data["rl_attack_path"], # Flat for easy dashboard access
+        "rl_expected_reward": rl_attacker_data["expected_reward"],
+        "rl_comparison": rl_attacker_data["rl_vs_deterministic"],
+
+        # Stage 4 Analytics
+        "validation_score": val_score,
+        "matched_incident": val_incident,
+        "defender_recommendations": recommendations,
 
         # Paths
         "paths": all_paths, 
@@ -224,6 +266,7 @@ def run_simulation_logic(
 
         # Analytics
         "exploit_probability": exploit_prob,
+        "vulnerability_intelligence": collect_vulnerability_intelligence(G, primary_path),
         "breach_probability_overall": compute_overall_breach_probability(G, all_paths, attacker_skill),
         "monte_carlo_results": monte_carlo_results,
         "centrality_scores": {cp["node"]: cp["centrality"] for cp in choke_points},
@@ -272,6 +315,9 @@ def _build_resilient_response(request_id, version, arch, resilience, start_time)
         "request_id": request_id,
         "execution_time": round(time.perf_counter() - start_time, 4),
         "version": version,
+        "validation_score": None,
+        "matched_incident": None,
+        "defender_recommendations": [],
         "resilience_summary": resilience,
         "risk_score": 0,
         "structural_risk": 0,
@@ -295,6 +341,7 @@ def _build_resilient_response(request_id, version, arch, resilience, start_time)
             "privilege_amplification": 0
         },
         "exploit_probability": 0,
+        "vulnerability_intelligence": [],
         "breach_probability_overall": 0,
         "monte_carlo_results": {
             "iterations": 0,

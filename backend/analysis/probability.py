@@ -2,21 +2,22 @@
 probability.py — Probabilistic exploit modeling.
 STAGE 3: Objective 3.
 
-Now uses ML-based predictions when the trained model is available,
-with automatic fallback to rule-based constants if the model is missing.
+Now uses ML-based predictions and CVE intelligence for grounded probability,
+with automatic fallback to rule-based constants if both are missing.
 
 Architecture:
-  - Entry node: ML prediction (or rule-based fallback) determines initial exploit chance
-  - Hop nodes:  ML prediction is BLENDED with structural lateral movement probability
-                so that internal nodes with low direct exploit chance still allow
-                realistic path traversal via credential reuse / trust relationships
+  - Entry node: CVE Intel > ML prediction > rule-based fallback
+  - Hop nodes:  CVE Intel > blend(ML_prediction, lateral_movement_prob) > rule-based fallback
 """
 
 import networkx as nx
+import os
 from analysis.ml_exploit_predictor import extract_features, predict_exploit_probability
+from vulnerability_intelligence import VulnerabilityIntelligence
+from mitre_mapper import MitreMapper
 
 # ---------------------------------------------------------------------------
-# Rule-based fallback constants (original logic — used when ML model is absent)
+# Rule-based fallback constants (original logic)
 # ---------------------------------------------------------------------------
 PROB_DEFAULT_CVE    = 0.6
 PROB_CRITICAL_CVE   = 0.85
@@ -28,6 +29,61 @@ PROB_CRED_REUSE     = 0.9
 # vs the structural lateral movement probability
 _ML_BLEND_WEIGHT = 0.4  # 40% ML, 60% lateral movement
 
+# Initialize Vulnerability Intelligence and MITRE Mapper once at module level
+_NVD_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "nvd.json.gz")
+if not os.path.exists(_NVD_PATH):
+    _NVD_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "nvd.json.gz")
+if not os.path.exists(_NVD_PATH):
+    _NVD_PATH = "nvd.json.gz"
+
+# Use lazy_load=True as required
+vuln_intel = VulnerabilityIntelligence(_NVD_PATH, lazy_load=True)
+mitre_mapper = MitreMapper()
+
+def get_grounded_exploit_prob(node_data: dict) -> tuple[float | None, dict | None, dict | None]:
+    """
+    Computes grounded exploit probability based on CVSS metrics if CVEs are present.
+    Returns (probability, display_intel, raw_intel) or (None, None, None).
+    """
+    cves = node_data.get("cves", [])
+    if not cves:
+        return None, None, None
+    
+    best_prob = -1.0
+    best_display_intel = None
+    best_raw_intel = None
+    
+    for cve_id in cves:
+        intel = vuln_intel.get_cve_intelligence(cve_id)
+        if not intel:
+            continue
+            
+        base_prob = intel["normalized_exploitability"]
+        
+        # Apply structured modifiers
+        if intel.get("attack_vector") == "NETWORK":
+            base_prob += 0.10
+        if intel.get("privileges_required") == "NONE":
+            base_prob += 0.05
+        if intel.get("attack_complexity") == "LOW":
+            base_prob += 0.05
+            
+        grounded_prob = min(base_prob, 0.95)
+        
+        if grounded_prob > best_prob:
+            best_prob = grounded_prob
+            best_display_intel = {
+                "cve": intel["cve_id"],
+                "cvss_score": intel["base_score"],
+                "exploitability_score": intel["exploitability_score"],
+                "grounded_probability": round(grounded_prob, 4)
+            }
+            best_raw_intel = intel
+            
+    if best_prob < 0:
+        return None, None, None
+        
+    return best_prob, best_display_intel, best_raw_intel
 
 def _get_node_exploit_prob(node_data: dict) -> float | None:
     """
@@ -66,16 +122,7 @@ def compute_path_probability(G: nx.DiGraph, path: list[str], skill_multiplier: f
     """
     Compute path success probability as product of step probabilities.
 
-    Uses ML model predictions when available. Falls back to rule-based
-    constants if the model is missing or prediction fails for a node.
-
-    For entry nodes:  P = ML_prediction (or rule-based)
-    For hop nodes:    P = blend(ML_prediction, lateral_movement_prob)
-                      This ensures internal nodes aren't zeroed out by
-                      the ML model while still incorporating its signal.
-
-    STAGE 3: Objective 3.
-    Extended with ML predictions for AI-driven probability.
+    Prioritizes Grounded CVE Intel > ML model > rule-based.
     """
     if not path:
         return 0.0
@@ -84,14 +131,19 @@ def compute_path_probability(G: nx.DiGraph, path: list[str], skill_multiplier: f
     entry = path[0]
     entry_data = G.nodes.get(entry, {})
 
-    ml_prob = _get_node_exploit_prob(entry_data)
-    if ml_prob is not None:
-        # ML prediction available — use it, apply skill multiplier
-        prob = min(max(ml_prob, 0.05) * skill_multiplier, 0.99)
+    # 1. Try Grounded CVE Prob
+    grounded_prob, _, _ = get_grounded_exploit_prob(entry_data)
+    if grounded_prob is not None:
+        prob = grounded_prob # Use deterministic grounded_prob as per requirement
     else:
-        # Fallback: rule-based entry probability
-        ports = entry_data.get("open_ports", [])
-        prob = min(_rule_based_entry_prob(ports) * skill_multiplier, 0.99)
+        # 2. Try ML Prediction
+        ml_prob = _get_node_exploit_prob(entry_data)
+        if ml_prob is not None:
+            prob = min(max(ml_prob, 0.05) * skill_multiplier, 0.99)
+        else:
+            # 3. Fallback: rule-based entry probability
+            ports = entry_data.get("open_ports", [])
+            prob = min(_rule_based_entry_prob(ports) * skill_multiplier, 0.99)
 
     # --- Walk the path and multiply by hop probabilities ---
     for i in range(1, len(path)):
@@ -103,21 +155,24 @@ def compute_path_probability(G: nx.DiGraph, path: list[str], skill_multiplier: f
         # Structural lateral movement probability (always computed)
         lateral_prob = _rule_based_hop_prob(prev_data, node_data, skill_multiplier)
 
-        ml_hop_prob = _get_node_exploit_prob(node_data)
-        if ml_hop_prob is not None:
-            # Blend ML prediction with lateral movement probability
-            # This ensures internal nodes retain realistic traversal chances
-            # while the ML model contributes its vulnerability assessment
-            ml_clamped = max(ml_hop_prob, 0.05)
-            hop_prob = (_ML_BLEND_WEIGHT * ml_clamped) + ((1 - _ML_BLEND_WEIGHT) * lateral_prob)
-            hop_prob = min(hop_prob * skill_multiplier, 0.99)
-
-            # Privilege escalation penalty still applies from structural data
-            if prev_data.get("permission") == "low" and node_data.get("permission") in ("medium", "high"):
-                hop_prob *= PROB_PRIV_ESC
+        # 1. Try Grounded CVE Prob
+        grounded_prob, _, _ = get_grounded_exploit_prob(node_data)
+        if grounded_prob is not None:
+            hop_prob = grounded_prob
         else:
-            # Fallback: pure rule-based hop probability
-            hop_prob = lateral_prob
+            # 2. Try ML Blend
+            ml_hop_prob = _get_node_exploit_prob(node_data)
+            if ml_hop_prob is not None:
+                ml_clamped = max(ml_hop_prob, 0.05)
+                hop_prob = (_ML_BLEND_WEIGHT * ml_clamped) + ((1 - _ML_BLEND_WEIGHT) * lateral_prob)
+                hop_prob = min(hop_prob * skill_multiplier, 0.99)
+
+                # Privilege escalation penalty still applies from structural data
+                if prev_data.get("permission") == "low" and node_data.get("permission") in ("medium", "high"):
+                    hop_prob *= PROB_PRIV_ESC
+            else:
+                # 3. Fallback: pure rule-based hop probability
+                hop_prob = lateral_prob
 
         prob *= hop_prob
 
@@ -133,3 +188,40 @@ def compute_overall_breach_probability(G: nx.DiGraph, all_paths: list[list[str]]
 
     probs = [compute_path_probability(G, p, skill_multiplier) for p in all_paths]
     return max(probs) if probs else 0.0
+
+def collect_vulnerability_intelligence(G: nx.DiGraph, path: list[str]) -> list[dict]:
+    """
+    Extract intelligence for each CVE-driven node in the path.
+    Also maps to MITRE ATT&CK techniques.
+    """
+    intelligence = []
+    for i, node in enumerate(path):
+        node_data = G.nodes.get(node, {})
+        _, display_intel, raw_intel = get_grounded_exploit_prob(node_data)
+        
+        if display_intel and raw_intel:
+            # Context for MITRE mapping
+            is_priv_esc = False
+            is_lateral_movement = i > 0
+            is_high_value_access = node_data.get("high_value", False)
+            
+            if i > 0:
+                prev_node = path[i - 1]
+                prev_data = G.nodes.get(prev_node, {})
+                # Detect privilege escalation
+                if prev_data.get("permission") == "low" and node_data.get("permission") in ("medium", "high"):
+                    is_priv_esc = True
+            
+            # Map techniques
+            techniques = mitre_mapper.map_cve_to_techniques(
+                raw_intel,
+                is_priv_esc=is_priv_esc,
+                is_lateral_movement=is_lateral_movement,
+                is_high_value_access=is_high_value_access
+            )
+            
+            # Add to display intel
+            display_intel["mitre_techniques"] = techniques
+            intelligence.append(display_intel)
+            
+    return intelligence
