@@ -84,10 +84,9 @@ export interface ResilienceSummary {
 
 export interface SimulationResult {
   // Attack paths
-  primary_attack_path: string[];
-  secondary_attack_path: string[];
+  paths: string[][];
+  primary_path: string[];
   secondary_paths: string[][];
-  path_count: number;
   // Legacy compat
   attack_path: string[];
   attack_steps: AttackStep[];
@@ -125,41 +124,41 @@ export interface SimulationResult {
     average_time_if_successful: string;
   };
   choke_points?: Array<{ node: string; centrality: number }>;
-    harden_metrics?: HardenMetrics | null;
-    sensitivity_analysis?: SensitivityAnalysis;
-    resilience_summary?: ResilienceSummary;
+  harden_metrics?: HardenMetrics | null;
+  sensitivity_analysis?: SensitivityAnalysis;
+  resilience_summary?: ResilienceSummary;
 
-    // Confidence
-    confidence_score: number;
-    confidence_label: string;
-    confidence_color: string;
-    confidence_factors: Record<string, number>;
+  // Confidence
+  confidence_score: number;
+  confidence_label: string;
+  confidence_color: string;
+  confidence_factors: Record<string, number>;
 
-    // Breach time
-    breach_time: string;
-    breach_time_data: {
-      display: string;
-      total_minutes: number;
-      breakdown: BreachBreakdown[];
-    };
+  // Breach time
+  breach_time: string;
+  breach_time_data: {
+    display: string;
+    total_minutes: number;
+    breakdown: BreachBreakdown[];
+  };
 
-    // Business impact
-    business_impact: BusinessImpact;
+  // Business impact
+  business_impact: BusinessImpact;
 
-    // AI Standard Output
-    ai_analysis?: {
-      executive_summary: string;
-      technical_analysis: string;
-      risk_justification: string;
-      business_interpretation: string;
-      mitigation_roadmap: string;
-      error: string | null;
-    };
+  // AI Standard Output
+  ai_analysis?: {
+    executive_summary: string;
+    technical_analysis: string;
+    risk_justification: string;
+    business_interpretation: string;
+    mitigation_roadmap: string;
+    error: string | null;
+  };
 
-    // AI Detail Object
-    ai: {
-      executive_summary: string;
-      technical_analysis: string;
+  // AI Detail Object
+  ai: {
+    executive_summary: string;
+    technical_analysis: string;
 
     risk_justification: string;
     business_interpretation: string;

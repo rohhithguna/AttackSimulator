@@ -45,7 +45,8 @@ def run_simulation_logic(
     openai_key: str = "", 
     monte_carlo_enabled: bool = True, 
     attacker_skill: float = 1.0, 
-    harden_node: str = None
+    harden_node: str = None,
+    _skip_extensions: bool = False
 ) -> dict:
     """
     Core execution logic for the simulation.
@@ -157,17 +158,27 @@ def run_simulation_logic(
 
     # Node Hardening Sandbox
     harden_metrics = None
-    if harden_node:
+    if harden_node and not _skip_extensions:
         harden_metrics = simulate_node_hardening(
             arch=arch, 
             node_id=harden_node, 
             baseline_metrics=baseline_metrics, 
-            run_sim_func=run_simulation_logic,
+            run_sim_func=lambda *a, **kw: run_simulation_logic(*a, **kw, _skip_extensions=True),
             attacker_skill=attacker_skill
         )
 
-    # Sensitivity Analysis
-    sensitivity_results = perform_sensitivity_analysis(arch, run_simulation_logic)
+    # Sensitivity Analysis (skip during recursive calls to prevent infinite recursion)
+    if _skip_extensions:
+        sensitivity_results = {
+            "analysis_type": "attacker_skill_sensitivity",
+            "scenarios": [],
+            "risk_variance": 0
+        }
+    else:
+        sensitivity_results = perform_sensitivity_analysis(
+            arch, 
+            lambda *a, **kw: run_simulation_logic(*a, **kw, _skip_extensions=True)
+        )
 
     # 6. AI Explanation
     ai_result = explain_attack(

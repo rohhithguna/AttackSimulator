@@ -22,7 +22,7 @@ const DEFAULT_JSON = JSON.stringify(
       web: [80, 443, 22], app: [8080, 22], db: [3306], storage: [22], backup: [],
     },
     permissions: { web: "low", app: "medium", db: "high", storage: "high", backup: "high" },
-    asset_value:  { web: 3, app: 5, db: 8, storage: 9, backup: 10 },
+    asset_value: { web: 3, app: 5, db: 8, storage: 9, backup: 10 },
     public_facing: ["web"],
   },
   null, 2
@@ -48,8 +48,8 @@ const SCENARIOS: Record<string, object> = {
   },
   "Deep Chain": {
     servers: ["dmz", "proxy", "app", "internal", "vault"],
-    connections: [["dmz","proxy"],["proxy","app"],["app","internal"],["internal","vault"]],
-    open_ports: { dmz: [80,443,22], proxy: [8080], app: [3000], internal: [22], vault: [] },
+    connections: [["dmz", "proxy"], ["proxy", "app"], ["app", "internal"], ["internal", "vault"]],
+    open_ports: { dmz: [80, 443, 22], proxy: [8080], app: [3000], internal: [22], vault: [] },
     permissions: { dmz: "low", proxy: "low", app: "medium", internal: "high", vault: "high" },
     asset_value: { dmz: 2, proxy: 3, app: 6, internal: 8, vault: 10 },
     public_facing: ["dmz"],
@@ -112,18 +112,18 @@ function Expandable({ title, children, defaultOpen = false }: {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const IMPACT_TAG_COLORS: Record<string, { bg: string; text: string }> = {
-  "critical-data-exposure":    { bg: "rgba(142,68,173,0.15)", text: "#9b59b6" },
-  "elevated-data-risk":        { bg: "rgba(231,76,60,0.12)",  text: "#e74c3c" },
-  "moderate-data-risk":        { bg: "rgba(243,156,18,0.12)", text: "#f39c12" },
-  "low-data-risk":             { bg: "rgba(46,204,113,0.1)",  text: "#2ecc71" },
-  "rapid-compromise":          { bg: "rgba(231,76,60,0.15)",  text: "#ff7b72" },
-  "service-disruption-risk":   { bg: "rgba(231,76,60,0.12)",  text: "#e74c3c" },
-  "lateral-disruption-risk":   { bg: "rgba(243,156,18,0.12)", text: "#f39c12" },
-  "contained-operational-risk":{ bg: "rgba(46,204,113,0.1)",  text: "#2ecc71" },
-  "gdpr-exposure":             { bg: "rgba(88,166,255,0.12)", text: "#58a6ff" },
-  "privileged-access-compliance":{ bg: "rgba(88,166,255,0.12)", text: "#58a6ff" },
-  "pci-dss-risk":              { bg: "rgba(88,166,255,0.12)", text: "#58a6ff" },
-  "attack-surface-compliance": { bg: "rgba(88,166,255,0.1)",  text: "#79c0ff" },
+  "critical-data-exposure": { bg: "rgba(142,68,173,0.15)", text: "#9b59b6" },
+  "elevated-data-risk": { bg: "rgba(231,76,60,0.12)", text: "#e74c3c" },
+  "moderate-data-risk": { bg: "rgba(243,156,18,0.12)", text: "#f39c12" },
+  "low-data-risk": { bg: "rgba(46,204,113,0.1)", text: "#2ecc71" },
+  "rapid-compromise": { bg: "rgba(231,76,60,0.15)", text: "#ff7b72" },
+  "service-disruption-risk": { bg: "rgba(231,76,60,0.12)", text: "#e74c3c" },
+  "lateral-disruption-risk": { bg: "rgba(243,156,18,0.12)", text: "#f39c12" },
+  "contained-operational-risk": { bg: "rgba(46,204,113,0.1)", text: "#2ecc71" },
+  "gdpr-exposure": { bg: "rgba(88,166,255,0.12)", text: "#58a6ff" },
+  "privileged-access-compliance": { bg: "rgba(88,166,255,0.12)", text: "#58a6ff" },
+  "pci-dss-risk": { bg: "rgba(88,166,255,0.12)", text: "#58a6ff" },
+  "attack-surface-compliance": { bg: "rgba(88,166,255,0.1)", text: "#79c0ff" },
 };
 
 function BusinessImpactCard({ impact }: { impact: SimulationResult["business_impact"] }) {
@@ -135,16 +135,16 @@ function BusinessImpactCard({ impact }: { impact: SimulationResult["business_imp
     padding: "2px 8px",
     borderRadius: "20px",
     background: IMPACT_TAG_COLORS[tag]?.bg ?? "rgba(255,255,255,0.06)",
-    color:      IMPACT_TAG_COLORS[tag]?.text ?? "#8b949e",
+    color: IMPACT_TAG_COLORS[tag]?.text ?? "#8b949e",
     marginRight: "6px",
     marginBottom: "4px",
     display: "inline-block",
   });
 
   const impactSections = [
-    { key: "data_risk",        label: "Data Risk",        icon: "🗄️",  color: "#e74c3c", content: impact.data_risk },
-    { key: "operational_risk", label: "Operational Risk", icon: "⚙️",  color: "#f39c12", content: impact.operational_risk },
-    { key: "compliance_risk",  label: "Compliance Risk",  icon: "📋",  color: "#58a6ff", content: impact.compliance_risk },
+    { key: "data_risk", label: "Data Risk", icon: "🗄️", color: "#e74c3c", content: impact.data_risk },
+    { key: "operational_risk", label: "Operational Risk", icon: "⚙️", color: "#f39c12", content: impact.operational_risk },
+    { key: "compliance_risk", label: "Compliance Risk", icon: "📋", color: "#58a6ff", content: impact.compliance_risk },
   ];
 
   return (
@@ -164,12 +164,16 @@ function BusinessImpactCard({ impact }: { impact: SimulationResult["business_imp
             borderLeft: `3px solid ${sec.color}`, borderRadius: "0 8px 8px 0",
             padding: "14px 16px",
           }}>
-            <div style={{ fontSize: "11px", fontWeight: 700, color: sec.color,
-              textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px" }}>
+            <div style={{
+              fontSize: "11px", fontWeight: 700, color: sec.color,
+              textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px"
+            }}>
               {sec.icon} {sec.label}
             </div>
-            <p style={{ color: "#c9d1d9", fontSize: "12px", lineHeight: "1.65", margin: 0,
-              whiteSpace: "pre-wrap" }}>
+            <p style={{
+              color: "#c9d1d9", fontSize: "12px", lineHeight: "1.65", margin: 0,
+              whiteSpace: "pre-wrap"
+            }}>
               {sec.content}
             </p>
           </div>
@@ -205,42 +209,46 @@ function BeforeAfterPanel({
   onClear: () => void;
 }) {
   const riskDelta = delta(original.risk_score, mitigated.risk_score);
-    const timeDelta = delta(original.breach_time_data.total_minutes, mitigated.breach_time_data.total_minutes);
-    const confDelta = delta(original.confidence_score, mitigated.confidence_score);
+  const timeDelta = delta(original.breach_time_data.total_minutes, mitigated.breach_time_data.total_minutes);
+  const confDelta = delta(original.confidence_score, mitigated.confidence_score);
 
-    const col = (improved: boolean) => improved ? "#2ecc71" : "#e74c3c";
+  const col = (improved: boolean) => improved ? "#2ecc71" : "#e74c3c";
 
-    return (
-      <div style={{
-        background: "#161b22", border: "1px solid #30363d", borderRadius: "10px",
-        padding: "20px", marginBottom: "24px",
-      }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-          <div style={{ fontSize: "13px", fontWeight: 700, color: "#e6edf3",
-            textTransform: "uppercase", letterSpacing: "1px" }}>
-            Mitigation Re-Simulation — Before vs After
-          </div>
-          <button onClick={onClear} style={{
-            background: "transparent", border: "1px solid #30363d",
-            borderRadius: "6px", padding: "4px 10px", cursor: "pointer",
-            color: "#8b949e", fontSize: "11px",
-          }}>
-            Clear
-          </button>
+  return (
+    <div style={{
+      background: "#161b22", border: "1px solid #30363d", borderRadius: "10px",
+      padding: "20px", marginBottom: "24px",
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+        <div style={{
+          fontSize: "13px", fontWeight: 700, color: "#e6edf3",
+          textTransform: "uppercase", letterSpacing: "1px"
+        }}>
+          Mitigation Re-Simulation — Before vs After
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "16px" }}>
-          {[
-            { label: "Risk Score",   before: original.risk_score.toFixed(2),             after: mitigated.risk_score.toFixed(2),              d: riskDelta },
-            { label: "Breach Time",  before: original.breach_time_data.display,               after: mitigated.breach_time_data.display,                d: timeDelta },
-            { label: "Confidence",   before: `${original.confidence_score}%`,            after: `${mitigated.confidence_score}%`,             d: confDelta },
-          ].map(({ label, before, after, d }) => (
+        <button onClick={onClear} style={{
+          background: "transparent", border: "1px solid #30363d",
+          borderRadius: "6px", padding: "4px 10px", cursor: "pointer",
+          color: "#8b949e", fontSize: "11px",
+        }}>
+          Clear
+        </button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px", marginBottom: "16px" }}>
+        {[
+          { label: "Risk Score", before: original.risk_score.toFixed(2), after: mitigated.risk_score.toFixed(2), d: riskDelta },
+          { label: "Breach Time", before: original.breach_time_data.display, after: mitigated.breach_time_data.display, d: timeDelta },
+          { label: "Confidence", before: `${original.confidence_score}%`, after: `${mitigated.confidence_score}%`, d: confDelta },
+        ].map(({ label, before, after, d }) => (
 
           <div key={label} style={{
             background: "#0d1117", border: "1px solid #30363d", borderRadius: "8px",
             padding: "14px 16px", textAlign: "center",
           }}>
-            <div style={{ fontSize: "10px", color: "#8b949e", textTransform: "uppercase",
-              letterSpacing: "1px", marginBottom: "8px" }}>{label}</div>
+            <div style={{
+              fontSize: "10px", color: "#8b949e", textTransform: "uppercase",
+              letterSpacing: "1px", marginBottom: "8px"
+            }}>{label}</div>
             <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "12px" }}>
               <div>
                 <div style={{ fontSize: "11px", color: "#484f58", marginBottom: "2px" }}>BEFORE</div>
@@ -269,10 +277,10 @@ function BeforeAfterPanel({
 }
 
 const SEV_STYLE: Record<string, { bg: string; text: string; border: string }> = {
-  Low:      { bg: "rgba(46,204,113,0.15)",  text: "#2ecc71", border: "rgba(46,204,113,0.4)"  },
-  Medium:   { bg: "rgba(243,156,18,0.15)",  text: "#f39c12", border: "rgba(243,156,18,0.4)"  },
-  High:     { bg: "rgba(231,76,60,0.15)",   text: "#e74c3c", border: "rgba(231,76,60,0.4)"   },
-  Critical: { bg: "rgba(142,68,173,0.15)",  text: "#8e44ad", border: "rgba(142,68,173,0.4)"  },
+  Low: { bg: "rgba(46,204,113,0.15)", text: "#2ecc71", border: "rgba(46,204,113,0.4)" },
+  Medium: { bg: "rgba(243,156,18,0.15)", text: "#f39c12", border: "rgba(243,156,18,0.4)" },
+  High: { bg: "rgba(231,76,60,0.15)", text: "#e74c3c", border: "rgba(231,76,60,0.4)" },
+  Critical: { bg: "rgba(142,68,173,0.15)", text: "#8e44ad", border: "rgba(142,68,173,0.4)" },
 };
 
 function SeverityBadge({ sev, label }: { sev: string; label?: string }) {
@@ -346,8 +354,10 @@ function MitigationEditor({
       {/* Close ports */}
       {allOpenPorts.length > 0 && (
         <div style={{ marginBottom: "16px" }}>
-          <div style={{ fontSize: "11px", fontWeight: 600, color: "#58a6ff", textTransform: "uppercase",
-            letterSpacing: "1px", marginBottom: "8px" }}>
+          <div style={{
+            fontSize: "11px", fontWeight: 600, color: "#58a6ff", textTransform: "uppercase",
+            letterSpacing: "1px", marginBottom: "8px"
+          }}>
             Close Ports
           </div>
           <div style={{ display: "flex", flexWrap: "wrap" as const, gap: "6px" }}>
@@ -373,8 +383,10 @@ function MitigationEditor({
       {/* Remove public exposure */}
       {arch.public_facing.length > 0 && (
         <div style={{ marginBottom: "16px" }}>
-          <div style={{ fontSize: "11px", fontWeight: 600, color: "#58a6ff", textTransform: "uppercase",
-            letterSpacing: "1px", marginBottom: "8px" }}>
+          <div style={{
+            fontSize: "11px", fontWeight: 600, color: "#58a6ff", textTransform: "uppercase",
+            letterSpacing: "1px", marginBottom: "8px"
+          }}>
             Remove Public Exposure
           </div>
           <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" as const }}>
@@ -397,14 +409,18 @@ function MitigationEditor({
 
       {/* Change privilege */}
       <div style={{ marginBottom: "16px" }}>
-        <div style={{ fontSize: "11px", fontWeight: 600, color: "#58a6ff", textTransform: "uppercase",
-          letterSpacing: "1px", marginBottom: "8px" }}>
+        <div style={{
+          fontSize: "11px", fontWeight: 600, color: "#58a6ff", textTransform: "uppercase",
+          letterSpacing: "1px", marginBottom: "8px"
+        }}>
           Change Privilege Level
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px,1fr))", gap: "8px" }}>
           {arch.servers.map(s => (
-            <div key={s} style={{ display: "flex", alignItems: "center", gap: "8px",
-              background: "#0d1117", border: "1px solid #30363d", borderRadius: "6px", padding: "6px 10px" }}>
+            <div key={s} style={{
+              display: "flex", alignItems: "center", gap: "8px",
+              background: "#0d1117", border: "1px solid #30363d", borderRadius: "6px", padding: "6px 10px"
+            }}>
               <span style={{ color: "#c9d1d9", fontSize: "12px", flex: 1 }}>{s}</span>
               <select
                 value={getPrivilege(s)}
@@ -432,9 +448,11 @@ function MitigationEditor({
       }}>
         {loading ? (
           <>
-            <span style={{ display: "inline-block", width: "12px", height: "12px",
+            <span style={{
+              display: "inline-block", width: "12px", height: "12px",
               border: "2px solid #8b949e", borderTop: "2px solid #2ecc71",
-              borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+              borderRadius: "50%", animation: "spin 0.8s linear infinite"
+            }} />
             Re-simulating...
           </>
         ) : "⚡ Run Re-Simulation"}
@@ -514,9 +532,9 @@ function RiskBreakdownChart({ components }: { components?: SimulationResult["ris
     <div style={{ marginTop: "10px" }}>
       <div style={{ height: "16px", width: "100%", background: "#30363d", borderRadius: "8px", display: "flex", overflow: "hidden" }}>
         {entries.map(([key, val], i) => (
-          <div key={key} style={{ 
-            height: "100%", 
-            width: `${(val / total) * 100}%`, 
+          <div key={key} style={{
+            height: "100%",
+            width: `${(val / total) * 100}%`,
             background: ["#e74c3c", "#f39c12", "#58a6ff", "#8e44ad"][i],
             opacity: 0.8
           }} title={`${labels[key as keyof typeof labels]}: ${val}`} />
@@ -527,7 +545,7 @@ function RiskBreakdownChart({ components }: { components?: SimulationResult["ris
           <div key={key} style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
             <span style={{ width: "10px", height: "10px", borderRadius: "2px", background: ["#e74c3c", "#f39c12", "#58a6ff", "#8e44ad"][i] }} />
             <span style={{ color: "#8b949e" }}>{labels[key as keyof typeof labels]}</span>
-            <span style={{ marginLeft: "auto", fontWeight: 700, color: "#e6edf3" }}>{Math.round((val/total)*100)}%</span>
+            <span style={{ marginLeft: "auto", fontWeight: 700, color: "#e6edf3" }}>{Math.round((val / total) * 100)}%</span>
           </div>
         ))}
       </div>
@@ -550,23 +568,23 @@ function AttackTimelineAnimation({ timeline }: { timeline?: SimulationResult["at
         }
       `}</style>
       {timeline.map((step, i) => (
-        <div 
-          key={i} 
+        <div
+          key={i}
           className="timeline-step"
-          style={{ 
-            marginBottom: "20px", 
+          style={{
+            marginBottom: "20px",
             position: "relative",
             animationDelay: `${i * 0.2}s`
           }}
         >
-          <div style={{ 
-            position: "absolute", left: "-31px", top: "0", width: "12px", height: "12px", 
+          <div style={{
+            position: "absolute", left: "-31px", top: "0", width: "12px", height: "12px",
             borderRadius: "50%", background: "#e74c3c", border: "4px solid #0d1117",
             boxShadow: "0 0 10px rgba(231,76,60,0.5)"
           }} />
           <div style={{ fontSize: "12px", fontWeight: 700, color: "#e6edf3" }}>Step {step.step}: {step.node}</div>
           <div style={{ fontSize: "11px", color: "#8b949e", marginTop: "2px" }}>
-            {step.action} · <span style={{ color: "#58a6ff" }}>{step.time_delta}</span> · 
+            {step.action} · <span style={{ color: "#58a6ff" }}>{step.time_delta}</span> ·
             <span style={{ color: step.privilege_level === 'high' ? '#8e44ad' : '#2ecc71', marginLeft: "4px" }}>
               {step.privilege_level} priv
             </span>
@@ -582,12 +600,12 @@ function ClusterSummary({ clusters }: { clusters?: SimulationResult["path_cluste
   return (
     <div style={{ display: "flex", gap: "10px", overflowX: "auto", paddingBottom: "10px", marginBottom: "16px" }}>
       {clusters.map((c, i) => (
-        <div key={i} style={{ 
-          minWidth: "180px", background: "#161b22", border: "1px solid #30363d", 
+        <div key={i} style={{
+          minWidth: "180px", background: "#161b22", border: "1px solid #30363d",
           borderRadius: "8px", padding: "12px", flexShrink: 0
         }}>
           <div style={{ fontSize: "10px", color: "#8b949e", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "4px" }}>
-            Cluster {i+1}
+            Cluster {i + 1}
           </div>
           <div style={{ fontSize: "12px", fontWeight: 600, color: "#e6edf3", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
             {c.cluster_type}
@@ -603,7 +621,7 @@ function ClusterSummary({ clusters }: { clusters?: SimulationResult["path_cluste
 
 function SensitivityAnalysisPanel({ analysis }: { analysis?: SimulationResult["sensitivity_analysis"] }) {
   if (!analysis || !analysis.scenarios || analysis.scenarios.length === 0) return null;
-  
+
   return (
     <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: "10px", padding: "20px", marginBottom: "24px" }}>
       <div style={{ fontSize: "13px", fontWeight: 700, color: "#e6edf3", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "16px" }}>
@@ -611,8 +629,8 @@ function SensitivityAnalysisPanel({ analysis }: { analysis?: SimulationResult["s
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
         {analysis.scenarios.map((s, i) => (
-          <div key={i} style={{ 
-            background: "#0d1117", border: "1px solid #30363d", borderRadius: "8px", 
+          <div key={i} style={{
+            background: "#0d1117", border: "1px solid #30363d", borderRadius: "8px",
             padding: "16px", textAlign: "center", position: "relative"
           }}>
             <div style={{ fontSize: "10px", color: "#8b949e", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px" }}>
@@ -645,8 +663,8 @@ function HardenSimulationPanel({ result, onSimulate }: { result: SimulationResul
         Choke Point Impact Simulation
       </div>
       <div style={{ display: "flex", gap: "12px", marginBottom: "20px" }}>
-        <select 
-          value={selectedNode} 
+        <select
+          value={selectedNode}
           onChange={(e) => setSelectedNode(e.target.value)}
           style={{ flex: 1, background: "#0d1117", border: "1px solid #30363d", borderRadius: "6px", color: "#c9d1d9", padding: "8px", fontSize: "12px" }}
         >
@@ -655,11 +673,11 @@ function HardenSimulationPanel({ result, onSimulate }: { result: SimulationResul
             <option key={cp.node} value={cp.node}>{cp.node} (Choke point score: {Math.round(cp.centrality * 100)})</option>
           ))}
         </select>
-        <button 
+        <button
           onClick={() => selectedNode && onSimulate(selectedNode)}
           disabled={!selectedNode}
-          style={{ 
-            background: "linear-gradient(135deg, #3498db, #2980b9)", color: "white", 
+          style={{
+            background: "linear-gradient(135deg, #3498db, #2980b9)", color: "white",
             border: "none", borderRadius: "6px", padding: "0 20px", fontSize: "12px", fontWeight: 600,
             cursor: selectedNode ? "pointer" : "not-allowed", opacity: selectedNode ? 1 : 0.6
           }}
@@ -691,24 +709,24 @@ function HardenSimulationPanel({ result, onSimulate }: { result: SimulationResul
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function Home() {
-  const [jsonInput,       setJsonInput]       = useState(DEFAULT_JSON);
-  const [openaiKey,       setOpenaiKey]       = useState("");
-  const [loading,         setLoading]         = useState(false);
-  const [mitigLoading,    setMitigLoading]    = useState(false);
-  const [result,          setResult]          = useState<SimulationResult | null>(null);
-  const [mitigResult,     setMitigResult]     = useState<SimulationResult | null>(null);
-  const [error,           setError]           = useState<string | null>(null);
-  const [showScenarios,   setShowScenarios]   = useState(false);
-  const [activeTab,       setActiveTab]       = useState<"analysis" | "raw">("analysis");
-  const [activePath,      setActivePath]      = useState<"primary" | "secondary">("primary");
-  const [mitigState,      setMitigState]      = useState<MitigationState>({ closePorts: [], changePrivilege: [], removePublic: [] });
-  const [attackerSkill,   setAttackerSkill]   = useState(1.0);
-  const [hardenNode,      setHardenNode]      = useState<string>("");
+  const [jsonInput, setJsonInput] = useState(DEFAULT_JSON);
+  const [openaiKey, setOpenaiKey] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [mitigLoading, setMitigLoading] = useState(false);
+  const [result, setResult] = useState<SimulationResult | null>(null);
+  const [mitigResult, setMitigResult] = useState<SimulationResult | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [showScenarios, setShowScenarios] = useState(false);
+  const [activeTab, setActiveTab] = useState<"analysis" | "raw">("analysis");
+  const [activePath, setActivePath] = useState<"primary" | "secondary">("primary");
+  const [mitigState, setMitigState] = useState<MitigationState>({ closePorts: [], changePrivilege: [], removePublic: [] });
+  const [attackerSkill, setAttackerSkill] = useState(1.0);
+  const [hardenNode, setHardenNode] = useState<string>("");
 
   const runSimulation = useCallback(async (overrideArch?: object, hardeningNode?: string) => {
     const isMitigation = Boolean(overrideArch);
     const isHardening = Boolean(hardeningNode);
-    
+
     if (isMitigation) setMitigLoading(true);
     else if (isHardening) setLoading(true); // Shared loading for now
     else {
@@ -732,8 +750,8 @@ export default function Home() {
       const res = await fetch("/api/simulate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          architecture: parsed, 
+        body: JSON.stringify({
+          architecture: parsed,
           openai_key: openaiKey,
           attacker_skill: attackerSkill,
           harden_node: hardeningNode || null
@@ -759,7 +777,8 @@ export default function Home() {
     runSimulation(modifiedArch);
   }, [result, mitigState, runSimulation]);
 
-  const hasSecondary = result && result.secondary_attack_path && result.secondary_attack_path.length > 0;
+  const secondaryPath = result?.secondary_paths?.[0] ?? [];
+  const hasSecondary = secondaryPath.length > 0;
 
   return (
     <div style={{
@@ -786,15 +805,19 @@ export default function Home() {
 
         {/* API Key */}
         <div style={{ marginBottom: "20px" }}>
-          <label style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "1px",
-            color: "#8b949e", display: "block", marginBottom: "5px" }}>
+          <label style={{
+            fontSize: "10px", textTransform: "uppercase", letterSpacing: "1px",
+            color: "#8b949e", display: "block", marginBottom: "5px"
+          }}>
             OpenAI API Key
           </label>
           <input type="password" value={openaiKey} onChange={e => setOpenaiKey(e.target.value)}
             placeholder="sk-... (optional)"
-            style={{ width: "100%", background: "#0d1117", border: "1px solid #30363d",
+            style={{
+              width: "100%", background: "#0d1117", border: "1px solid #30363d",
               borderRadius: "6px", padding: "7px 10px", color: "#c9d1d9", fontSize: "11px",
-              outline: "none", boxSizing: "border-box" }}
+              outline: "none", boxSizing: "border-box"
+            }}
           />
           <div style={{ fontSize: "9px", color: "#484f58", marginTop: "3px" }}>
             GPT-4o for AI analysis. Falls back to rule-based.
@@ -803,13 +826,15 @@ export default function Home() {
 
         {/* Attacker Skill Level */}
         <div style={{ marginBottom: "20px" }}>
-          <label style={{ fontSize: "10px", textTransform: "uppercase", letterSpacing: "1px",
-            color: "#8b949e", display: "block", marginBottom: "8px" }}>
+          <label style={{
+            fontSize: "10px", textTransform: "uppercase", letterSpacing: "1px",
+            color: "#8b949e", display: "block", marginBottom: "8px"
+          }}>
             Attacker Skill Level: <b style={{ color: "#e6edf3" }}>{attackerSkill === 0.6 ? "Low" : attackerSkill === 1.0 ? "Medium" : "Elite"}</b>
           </label>
-          <input 
-            type="range" min="0.6" max="1.4" step="0.4" 
-            value={attackerSkill} 
+          <input
+            type="range" min="0.6" max="1.4" step="0.4"
+            value={attackerSkill}
             onChange={e => setAttackerSkill(parseFloat(e.target.value))}
             style={{ width: "100%", accentColor: "#e74c3c", cursor: "pointer" }}
           />
@@ -821,18 +846,22 @@ export default function Home() {
         </div>
 
         {/* Schema reference */}
-        <div style={{ background: "#0d1117", border: "1px solid #30363d", borderRadius: "8px",
-          padding: "10px", marginBottom: "12px" }}>
-          <div style={{ fontSize: "10px", fontWeight: 600, color: "#8b949e",
-            textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px" }}>
+        <div style={{
+          background: "#0d1117", border: "1px solid #30363d", borderRadius: "8px",
+          padding: "10px", marginBottom: "12px"
+        }}>
+          <div style={{
+            fontSize: "10px", fontWeight: 600, color: "#8b949e",
+            textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px"
+          }}>
             Input Schema
           </div>
           {[
-            ["servers",       "list of node names"],
-            ["connections",   "directed edges [src, dst]"],
-            ["open_ports",    "per-server port lists"],
-            ["permissions",   "low / medium / high"],
-            ["asset_value",   "1–10 importance score"],
+            ["servers", "list of node names"],
+            ["connections", "directed edges [src, dst]"],
+            ["open_ports", "per-server port lists"],
+            ["permissions", "low / medium / high"],
+            ["asset_value", "1–10 importance score"],
             ["public_facing", "internet-exposed nodes"],
           ].map(([key, desc]) => (
             <div key={key} style={{ display: "flex", gap: "5px", marginBottom: "4px", fontSize: "10px" }}>
@@ -843,22 +872,30 @@ export default function Home() {
         </div>
 
         {/* Severity legend */}
-        <div style={{ background: "#0d1117", border: "1px solid #30363d", borderRadius: "8px",
-          padding: "10px", marginBottom: "12px" }}>
-          <div style={{ fontSize: "10px", fontWeight: 600, color: "#8b949e",
-            textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px" }}>
+        <div style={{
+          background: "#0d1117", border: "1px solid #30363d", borderRadius: "8px",
+          padding: "10px", marginBottom: "12px"
+        }}>
+          <div style={{
+            fontSize: "10px", fontWeight: 600, color: "#8b949e",
+            textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px"
+          }}>
             Severity Scale
           </div>
           {[
-            ["0–4",  "Low",      "#2ecc71"],
-            ["5–8",  "Medium",   "#f39c12"],
-            ["9–12", "High",     "#e74c3c"],
-            ["13+",  "Critical", "#8e44ad"],
+            ["0–4", "Low", "#2ecc71"],
+            ["5–8", "Medium", "#f39c12"],
+            ["9–12", "High", "#e74c3c"],
+            ["13+", "Critical", "#8e44ad"],
           ].map(([range, label, color]) => (
-            <div key={label as string} style={{ display: "flex", alignItems: "center",
-              gap: "7px", marginBottom: "4px", fontSize: "10px" }}>
-              <span style={{ display: "inline-block", width: "7px", height: "7px",
-                borderRadius: "50%", background: color as string, flexShrink: 0 }} />
+            <div key={label as string} style={{
+              display: "flex", alignItems: "center",
+              gap: "7px", marginBottom: "4px", fontSize: "10px"
+            }}>
+              <span style={{
+                display: "inline-block", width: "7px", height: "7px",
+                borderRadius: "50%", background: color as string, flexShrink: 0
+              }} />
               <span style={{ color: color as string, fontWeight: 600, minWidth: "48px" }}>{label}</span>
               <span style={{ color: "#484f58" }}>({range})</span>
             </div>
@@ -866,31 +903,41 @@ export default function Home() {
         </div>
 
         {/* Confidence legend */}
-        <div style={{ background: "#0d1117", border: "1px solid #30363d", borderRadius: "8px",
-          padding: "10px", marginBottom: "20px" }}>
-          <div style={{ fontSize: "10px", fontWeight: 600, color: "#8b949e",
-            textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px" }}>
+        <div style={{
+          background: "#0d1117", border: "1px solid #30363d", borderRadius: "8px",
+          padding: "10px", marginBottom: "20px"
+        }}>
+          <div style={{
+            fontSize: "10px", fontWeight: 600, color: "#8b949e",
+            textTransform: "uppercase", letterSpacing: "1px", marginBottom: "8px"
+          }}>
             Confidence (Attacker Certainty)
           </div>
           {[
             ["80–97%", "Very High", "#e74c3c"],
-            ["65–79%", "High",      "#f39c12"],
-            ["45–64%", "Moderate",  "#f1c40f"],
-            ["10–44%", "Low",       "#2ecc71"],
+            ["65–79%", "High", "#f39c12"],
+            ["45–64%", "Moderate", "#f1c40f"],
+            ["10–44%", "Low", "#2ecc71"],
           ].map(([range, label, color]) => (
-            <div key={label as string} style={{ display: "flex", alignItems: "center",
-              gap: "7px", marginBottom: "4px", fontSize: "10px" }}>
-              <span style={{ display: "inline-block", width: "7px", height: "7px",
-                borderRadius: "50%", background: color as string, flexShrink: 0 }} />
+            <div key={label as string} style={{
+              display: "flex", alignItems: "center",
+              gap: "7px", marginBottom: "4px", fontSize: "10px"
+            }}>
+              <span style={{
+                display: "inline-block", width: "7px", height: "7px",
+                borderRadius: "50%", background: color as string, flexShrink: 0
+              }} />
               <span style={{ color: color as string, fontWeight: 600, minWidth: "60px" }}>{label}</span>
               <span style={{ color: "#484f58" }}>({range})</span>
             </div>
           ))}
         </div>
 
-        <div style={{ marginTop: "auto", fontSize: "9px", color: "#484f58",
+        <div style={{
+          marginTop: "auto", fontSize: "9px", color: "#484f58",
           textAlign: "center", lineHeight: "1.6", paddingTop: "14px",
-          borderTop: "1px solid #30363d" }}>
+          borderTop: "1px solid #30363d"
+        }}>
           For educational &amp; CTF purposes only.
           <br />Not a vulnerability scanner.
         </div>
@@ -899,27 +946,33 @@ export default function Home() {
       {/* ── Main ─────────────────────────────────────────────────────────── */}
       <main style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {/* Header */}
-        <div style={{ padding: "16px 28px", borderBottom: "1px solid #30363d",
+        <div style={{
+          padding: "16px 28px", borderBottom: "1px solid #30363d",
           background: "#0d1117", display: "flex", alignItems: "center",
-          justifyContent: "space-between", flexShrink: 0 }}>
-            <div>
-              <h1 style={{ margin: 0, fontSize: "19px", fontWeight: 700, color: "#e6edf3" }}>
-                AI Attack Simulation Agent
-              </h1>
-              <p style={{ margin: "2px 0 0", fontSize: "11px", color: "#8b949e" }}>
-                Stage 4 — Enterprise Breach Intelligence Engine
-              </p>
-            </div>
-            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-              <span style={{ fontSize: "10px", background: "rgba(46,204,113,0.1)", color: "#2ecc71",
-                border: "1px solid rgba(46,204,113,0.25)", borderRadius: "20px",
-                padding: "2px 8px", letterSpacing: "1px", fontWeight: 600 }}>
-                STAGE 4
-              </span>
+          justifyContent: "space-between", flexShrink: 0
+        }}>
+          <div>
+            <h1 style={{ margin: 0, fontSize: "19px", fontWeight: 700, color: "#e6edf3" }}>
+              AI Attack Simulation Agent
+            </h1>
+            <p style={{ margin: "2px 0 0", fontSize: "11px", color: "#8b949e" }}>
+              Stage 4 — Enterprise Breach Intelligence Engine
+            </p>
+          </div>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <span style={{
+              fontSize: "10px", background: "rgba(46,204,113,0.1)", color: "#2ecc71",
+              border: "1px solid rgba(46,204,113,0.25)", borderRadius: "20px",
+              padding: "2px 8px", letterSpacing: "1px", fontWeight: 600
+            }}>
+              STAGE 4
+            </span>
 
-            <span style={{ fontSize: "10px", background: "rgba(231,76,60,0.12)", color: "#e74c3c",
+            <span style={{
+              fontSize: "10px", background: "rgba(231,76,60,0.12)", color: "#e74c3c",
               border: "1px solid rgba(231,76,60,0.25)", borderRadius: "20px",
-              padding: "2px 8px", letterSpacing: "1px", fontWeight: 600 }}>
+              padding: "2px 8px", letterSpacing: "1px", fontWeight: 600
+            }}>
               RED TEAM
             </span>
           </div>
@@ -928,17 +981,21 @@ export default function Home() {
         {/* Two-column body */}
         <div style={{ flex: 1, display: "grid", gridTemplateColumns: "360px 1fr", overflow: "hidden" }}>
           {/* Left: input panel */}
-          <div style={{ borderRight: "1px solid #30363d", display: "flex", flexDirection: "column",
-            padding: "20px", gap: "10px", overflowY: "auto" }}>
+          <div style={{
+            borderRight: "1px solid #30363d", display: "flex", flexDirection: "column",
+            padding: "20px", gap: "10px", overflowY: "auto"
+          }}>
             <SectionHeader>Architecture Input (JSON)</SectionHeader>
 
             <textarea value={jsonInput} onChange={e => setJsonInput(e.target.value)}
               spellCheck={false}
-              style={{ flex: 1, minHeight: "300px", background: "#161b22",
+              style={{
+                flex: 1, minHeight: "300px", background: "#161b22",
                 border: "1px solid #30363d", borderRadius: "8px", padding: "12px",
                 color: "#c9d1d9", fontSize: "11px",
                 fontFamily: "var(--font-geist-mono), 'Fira Code', monospace",
-                lineHeight: "1.6", resize: "vertical", outline: "none" }}
+                lineHeight: "1.6", resize: "vertical", outline: "none"
+              }}
             />
 
             <button onClick={() => runSimulation()} disabled={loading} style={{
@@ -950,9 +1007,11 @@ export default function Home() {
             }}>
               {loading ? (
                 <>
-                  <span style={{ display: "inline-block", width: "13px", height: "13px",
+                  <span style={{
+                    display: "inline-block", width: "13px", height: "13px",
                     border: "2px solid #8b949e", borderTop: "2px solid #e74c3c",
-                    borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+                    borderRadius: "50%", animation: "spin 0.8s linear infinite"
+                  }} />
                   Simulating...
                 </>
               ) : "⚡ Run Attack Simulation"}
@@ -988,8 +1047,10 @@ export default function Home() {
             </div>
 
             {error && (
-              <div style={{ background: "rgba(231,76,60,0.08)", border: "1px solid rgba(231,76,60,0.3)",
-                borderRadius: "8px", padding: "10px 12px", fontSize: "11px", color: "#ff7b72", lineHeight: "1.6" }}>
+              <div style={{
+                background: "rgba(231,76,60,0.08)", border: "1px solid rgba(231,76,60,0.3)",
+                borderRadius: "8px", padding: "10px 12px", fontSize: "11px", color: "#ff7b72", lineHeight: "1.6"
+              }}>
                 <strong>Error:</strong> {error}
               </div>
             )}
@@ -999,9 +1060,11 @@ export default function Home() {
           <div style={{ overflowY: "auto", padding: "20px 28px" }}>
             {/* Empty state */}
             {!result && !loading && !error && (
-              <div style={{ height: "100%", display: "flex", flexDirection: "column",
+              <div style={{
+                height: "100%", display: "flex", flexDirection: "column",
                 alignItems: "center", justifyContent: "center", gap: "16px",
-                color: "#8b949e", minHeight: "400px" }}>
+                color: "#8b949e", minHeight: "400px"
+              }}>
                 <div style={{ fontSize: "56px" }}>🎯</div>
                 <div style={{ textAlign: "center" }}>
                   <div style={{ fontSize: "17px", fontWeight: 600, color: "#e6edf3", marginBottom: "6px" }}>
@@ -1012,18 +1075,22 @@ export default function Home() {
                     <strong style={{ color: "#58a6ff" }}>Run Attack Simulation</strong>.
                   </div>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px",
-                  marginTop: "8px", width: "100%", maxWidth: "480px" }}>
+                <div style={{
+                  display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px",
+                  marginTop: "8px", width: "100%", maxWidth: "480px"
+                }}>
                   {[
-                    ["🔍 Entry Detection",      "Identifies public-facing attack surfaces"],
+                    ["🔍 Entry Detection", "Identifies public-facing attack surfaces"],
                     ["⬆️ Privilege Escalation", "Maps privilege boundary crossings"],
-                    ["➡️ Lateral Movement",     "Traces paths to high-value targets"],
-                    ["💀 Data Exfiltration",    "Estimates breach time & risk score"],
-                    ["📊 Confidence Scoring",   "Quantifies attacker path certainty"],
-                    ["🔄 Re-Simulation",        "Compare before vs after mitigations"],
+                    ["➡️ Lateral Movement", "Traces paths to high-value targets"],
+                    ["💀 Data Exfiltration", "Estimates breach time & risk score"],
+                    ["📊 Confidence Scoring", "Quantifies attacker path certainty"],
+                    ["🔄 Re-Simulation", "Compare before vs after mitigations"],
                   ].map(([title, desc]) => (
-                    <div key={title as string} style={{ background: "#161b22",
-                      border: "1px solid #30363d", borderRadius: "8px", padding: "10px" }}>
+                    <div key={title as string} style={{
+                      background: "#161b22",
+                      border: "1px solid #30363d", borderRadius: "8px", padding: "10px"
+                    }}>
                       <div style={{ fontSize: "11px", fontWeight: 600, color: "#e6edf3", marginBottom: "3px" }}>
                         {title}
                       </div>
@@ -1036,18 +1103,22 @@ export default function Home() {
 
             {/* Loading */}
             {loading && (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center",
-                justifyContent: "center", gap: "10px", minHeight: "400px" }}>
-                <div style={{ width: "44px", height: "44px", border: "3px solid #30363d",
+              <div style={{
+                display: "flex", flexDirection: "column", alignItems: "center",
+                justifyContent: "center", gap: "10px", minHeight: "400px"
+              }}>
+                <div style={{
+                  width: "44px", height: "44px", border: "3px solid #30363d",
                   borderTop: "3px solid #e74c3c", borderRadius: "50%",
-                  animation: "spin 1s linear infinite" }} />
+                  animation: "spin 1s linear infinite"
+                }} />
                 <div style={{ color: "#8b949e", fontSize: "13px" }}>Running attack simulation...</div>
                 {["Parsing architecture graph...", "Identifying entry points...",
                   "Finding all attack paths...", "Computing confidence scores...",
                   "Scoring risk vectors...", "Modeling business impact...",
                   "Generating AI analysis..."].map((step, i) => (
-                  <div key={i} style={{ fontSize: "11px", color: "#484f58" }}>▸ {step}</div>
-                ))}
+                    <div key={i} style={{ fontSize: "11px", color: "#484f58" }}>▸ {step}</div>
+                  ))}
               </div>
             )}
 
@@ -1055,10 +1126,12 @@ export default function Home() {
             {result && !loading && (
               <>
                 <ResilienceCard summary={result.resilience_summary} />
-                
+
                 {/* Tabs */}
-                <div style={{ display: "flex", gap: "4px", marginBottom: "20px",
-                  borderBottom: "1px solid #30363d" }}>
+                <div style={{
+                  display: "flex", gap: "4px", marginBottom: "20px",
+                  borderBottom: "1px solid #30363d"
+                }}>
                   {(["analysis", "raw"] as const).map(tab => (
                     <button key={tab} onClick={() => setActiveTab(tab)} style={{
                       background: "transparent", border: "none",
@@ -1080,8 +1153,10 @@ export default function Home() {
 
                     {/* Attack Graph with path toggle */}
                     <div style={{ marginBottom: "24px" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between",
-                        alignItems: "center", marginBottom: "12px" }}>
+                      <div style={{
+                        display: "flex", justifyContent: "space-between",
+                        alignItems: "center", marginBottom: "12px"
+                      }}>
                         <SectionHeader>Attack Graph</SectionHeader>
                         {hasSecondary && (
                           <div style={{ display: "flex", gap: "6px", marginBottom: "8px" }}>
@@ -1107,25 +1182,31 @@ export default function Home() {
                       </div>
 
                       {/* Path info strip */}
-                      <div style={{ background: "#161b22", border: "1px solid #30363d",
+                      <div style={{
+                        background: "#161b22", border: "1px solid #30363d",
                         borderRadius: "6px", padding: "8px 14px", marginBottom: "8px",
-                        display: "flex", gap: "16px", alignItems: "center", flexWrap: "wrap" as const }}>
+                        display: "flex", gap: "16px", alignItems: "center", flexWrap: "wrap" as const
+                      }}>
                         <div>
-                          <span style={{ fontSize: "10px", color: "#8b949e",
-                            textTransform: "uppercase", letterSpacing: "1px", marginRight: "6px" }}>
+                          <span style={{
+                            fontSize: "10px", color: "#8b949e",
+                            textTransform: "uppercase", letterSpacing: "1px", marginRight: "6px"
+                          }}>
                             {activePath === "primary" ? "Primary" : "Secondary"}:
                           </span>
-                          <span style={{ fontSize: "12px", fontWeight: 600,
-                            color: activePath === "primary" ? "#e74c3c" : "#3498db" }}>
+                          <span style={{
+                            fontSize: "12px", fontWeight: 600,
+                            color: activePath === "primary" ? "#e74c3c" : "#3498db"
+                          }}>
                             {(activePath === "primary"
-                              ? result.primary_attack_path
-                              : result.secondary_attack_path
+                              ? (result.primary_path ?? result.attack_path)
+                              : secondaryPath
                             ).join(" → ")}
                           </span>
                         </div>
                         {hasSecondary && (
                           <span style={{ fontSize: "10px", color: "#484f58" }}>
-                            {result.path_count} total path{result.path_count !== 1 ? "s" : ""} found
+                            {result.paths?.length ?? 0} total path{(result.paths?.length ?? 0) !== 1 ? "s" : ""} found
                           </span>
                         )}
                         {!hasSecondary && (
@@ -1135,13 +1216,15 @@ export default function Home() {
                         )}
                       </div>
 
-                      <div style={{ background: "#0d1117", border: "1px solid #30363d",
-                        borderRadius: "10px", overflow: "hidden" }}>
+                      <div style={{
+                        background: "#0d1117", border: "1px solid #30363d",
+                        borderRadius: "10px", overflow: "hidden"
+                      }}>
                         <AttackGraph
                           nodes={result.graph.nodes}
                           edges={result.graph.edges}
-                          attackPath={result.primary_attack_path ?? result.attack_path}
-                          secondaryPath={result.secondary_attack_path ?? []}
+                          attackPath={result.primary_path ?? result.attack_path}
+                          secondaryPath={secondaryPath}
                           activePath={activePath}
                           entryPoint={result.entry_point}
                           target={result.target}
@@ -1149,48 +1232,48 @@ export default function Home() {
                       </div>
                     </div>
 
-                      {/* Attack chain */}
-                      <div style={{ marginBottom: "24px" }}>
-                        <SectionHeader>Attack Chain</SectionHeader>
-                        <AttackChain
-                          attackPath={activePath === "primary"
-                            ? (result.primary_attack_path ?? result.attack_path)
-                            : (result.secondary_attack_path ?? [])}
-                          attackSteps={result.attack_steps}
-                          vulnerabilityChain={result.vulnerability_chain}
-                        />
-                      </div>
+                    {/* Attack chain */}
+                    <div style={{ marginBottom: "24px" }}>
+                      <SectionHeader>Attack Chain</SectionHeader>
+                      <AttackChain
+                        attackPath={activePath === "primary"
+                          ? (result.primary_path ?? result.attack_path)
+                          : secondaryPath}
+                        attackSteps={result.attack_steps}
+                        vulnerabilityChain={result.vulnerability_chain}
+                      />
+                    </div>
 
-                      {/* Advanced Analysis Extensions (Stage 4.5) */}
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginBottom: "24px" }}>
-                        <div>
-                          <SectionHeader>Attack Timeline</SectionHeader>
-                          <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: "10px", padding: "20px" }}>
-                            <AttackTimelineAnimation timeline={result.attack_timeline} />
-                          </div>
-                        </div>
-                        <div>
-                          <SectionHeader>Risk Distribution</SectionHeader>
-                          <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: "10px", padding: "20px" }}>
-                            <div style={{ fontSize: "12px", color: "#8b949e", marginBottom: "16px" }}>
-                              Composite risk contribution per structural vector:
-                            </div>
-                            <RiskBreakdownChart components={result.risk_components} />
-                          </div>
+                    {/* Advanced Analysis Extensions (Stage 4.5) */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginBottom: "24px" }}>
+                      <div>
+                        <SectionHeader>Attack Timeline</SectionHeader>
+                        <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: "10px", padding: "20px" }}>
+                          <AttackTimelineAnimation timeline={result.attack_timeline} />
                         </div>
                       </div>
-
-                        <div style={{ marginBottom: "24px" }}>
-                          <SectionHeader>Attack Path Clustering</SectionHeader>
-                          <ClusterSummary clusters={result.path_clusters} />
+                      <div>
+                        <SectionHeader>Risk Distribution</SectionHeader>
+                        <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: "10px", padding: "20px" }}>
+                          <div style={{ fontSize: "12px", color: "#8b949e", marginBottom: "16px" }}>
+                            Composite risk contribution per structural vector:
+                          </div>
+                          <RiskBreakdownChart components={result.risk_components} />
                         </div>
+                      </div>
+                    </div>
 
-                        <SensitivityAnalysisPanel analysis={result.sensitivity_analysis} />
+                    <div style={{ marginBottom: "24px" }}>
+                      <SectionHeader>Attack Path Clustering</SectionHeader>
+                      <ClusterSummary clusters={result.path_clusters} />
+                    </div>
 
-                        <HardenSimulationPanel result={result} onSimulate={(node) => runSimulation(undefined, node)} />
+                    <SensitivityAnalysisPanel analysis={result.sensitivity_analysis} />
+
+                    <HardenSimulationPanel result={result} onSimulate={(node) => runSimulation(undefined, node)} />
 
 
-                      {/* Business Impact */}
+                    {/* Business Impact */}
 
                     {result.business_impact && (
                       <div style={{ marginBottom: "24px" }}>
@@ -1221,15 +1304,21 @@ export default function Home() {
 
                     {/* Breach time breakdown */}
                     <Expandable title={`Breach Time Breakdown — ${result.breach_time_data.display}`}>
-                      <div style={{ display: "grid",
+                      <div style={{
+                        display: "grid",
                         gridTemplateColumns: `repeat(${Math.min(result.breach_time_data.breakdown.length, 4)}, 1fr)`,
-                        gap: "10px" }}>
+                        gap: "10px"
+                      }}>
                         {result.breach_time_data.breakdown.map(step => (
-                          <div key={step.node} style={{ background: "#161b22",
+                          <div key={step.node} style={{
+                            background: "#161b22",
                             border: "1px solid #30363d", borderRadius: "8px",
-                            padding: "12px", textAlign: "center" }}>
-                            <div style={{ fontSize: "10px", color: "#8b949e",
-                              textTransform: "uppercase", letterSpacing: "1px", marginBottom: "3px" }}>
+                            padding: "12px", textAlign: "center"
+                          }}>
+                            <div style={{
+                              fontSize: "10px", color: "#8b949e",
+                              textTransform: "uppercase", letterSpacing: "1px", marginBottom: "3px"
+                            }}>
                               {step.node}
                             </div>
                             <div style={{ fontSize: "10px", color: "#58a6ff", marginBottom: "5px" }}>
@@ -1250,11 +1339,15 @@ export default function Home() {
                     <Expandable title="Risk Score Breakdown">
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "10px" }}>
                         {Object.entries(result.component_scores).map(([key, val]) => (
-                          <div key={key} style={{ background: "#161b22",
+                          <div key={key} style={{
+                            background: "#161b22",
                             border: "1px solid #30363d", borderRadius: "8px",
-                            padding: "12px", textAlign: "center" }}>
-                            <div style={{ fontSize: "9px", color: "#8b949e",
-                              textTransform: "uppercase", letterSpacing: "1px", marginBottom: "5px" }}>
+                            padding: "12px", textAlign: "center"
+                          }}>
+                            <div style={{
+                              fontSize: "9px", color: "#8b949e",
+                              textTransform: "uppercase", letterSpacing: "1px", marginBottom: "5px"
+                            }}>
                               {key.replace(/_/g, " ")}
                             </div>
                             <div style={{ fontSize: "22px", fontWeight: 700, color: "#e6edf3" }}>{val}</div>
@@ -1276,15 +1369,21 @@ export default function Home() {
                             .map(([key, val]) => {
                               const isPositive = (val as number) >= 0;
                               return (
-                                <div key={key} style={{ background: "#161b22",
+                                <div key={key} style={{
+                                  background: "#161b22",
                                   border: `1px solid ${isPositive ? "rgba(46,204,113,0.2)" : "rgba(231,76,60,0.2)"}`,
-                                  borderRadius: "8px", padding: "10px 12px", textAlign: "center" }}>
-                                  <div style={{ fontSize: "9px", color: "#8b949e",
-                                    textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "4px" }}>
+                                  borderRadius: "8px", padding: "10px 12px", textAlign: "center"
+                                }}>
+                                  <div style={{
+                                    fontSize: "9px", color: "#8b949e",
+                                    textTransform: "uppercase", letterSpacing: "0.8px", marginBottom: "4px"
+                                  }}>
                                     {key.replace(/_/g, " ")}
                                   </div>
-                                  <div style={{ fontSize: "18px", fontWeight: 700,
-                                    color: isPositive ? "#2ecc71" : "#e74c3c" }}>
+                                  <div style={{
+                                    fontSize: "18px", fontWeight: 700,
+                                    color: isPositive ? "#2ecc71" : "#e74c3c"
+                                  }}>
                                     {(val as number) > 0 ? "+" : ""}{val}
                                   </div>
                                 </div>
@@ -1315,18 +1414,20 @@ export default function Home() {
                   </>
                 )}
 
-                  {activeTab === "raw" && (
-                    <div>
-                      <SectionHeader>Simulation Output (Unified Production Schema)</SectionHeader>
-                      <pre style={{ background: "#161b22", border: "1px solid #30363d",
-                        borderRadius: "8px", padding: "20px", overflow: "auto",
-                        fontSize: "11px", color: "#c9d1d9",
-                        fontFamily: "var(--font-geist-mono), monospace",
-                        lineHeight: "1.6", maxHeight: "600px" }}>
-                        {JSON.stringify(result, null, 2)}
-                      </pre>
-                    </div>
-                  )}
+                {activeTab === "raw" && (
+                  <div>
+                    <SectionHeader>Simulation Output (Unified Production Schema)</SectionHeader>
+                    <pre style={{
+                      background: "#161b22", border: "1px solid #30363d",
+                      borderRadius: "8px", padding: "20px", overflow: "auto",
+                      fontSize: "11px", color: "#c9d1d9",
+                      fontFamily: "var(--font-geist-mono), monospace",
+                      lineHeight: "1.6", maxHeight: "600px"
+                    }}>
+                      {JSON.stringify(result, null, 2)}
+                    </pre>
+                  </div>
+                )}
 
               </>
             )}
