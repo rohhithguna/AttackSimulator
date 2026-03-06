@@ -67,7 +67,7 @@ def _compute_exposure(is_public: bool, ports: list[int]) -> float:
     config = get_config()
     risk_weights = config.get("risk_model", {})
     
-    base_score = risk_weights.get("exposure_weight_max", 0.6) if is_public else risk_weights.get("exposure_weight_min", 0.1)
+    base_score = risk_weights.get("exposure_base_public", 0.6) if is_public else risk_weights.get("exposure_base_internal", 0.1)
     score = base_score
 
     if 22 in ports:
@@ -102,13 +102,3 @@ def get_entry_points(G: nx.DiGraph) -> list[str]:
 def get_highest_value_node(G: nx.DiGraph) -> str:
     """Return the node with the highest asset_value (exfiltration target)."""
     return max(G.nodes(data=True), key=lambda x: x[1].get("asset_value", 0))[0]
-
-
-def graph_summary(G: nx.DiGraph) -> dict:
-    """Return a human-readable summary of the graph."""
-    return {
-        "nodes": list(G.nodes()),
-        "edges": list(G.edges()),
-        "entry_points": get_entry_points(G),
-        "target": get_highest_value_node(G),
-    }

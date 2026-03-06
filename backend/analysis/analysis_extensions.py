@@ -45,7 +45,6 @@ def simulate_node_hardening(
         # We assume run_sim_func returns a dictionary containing 'risk_score' and 'paths'
         h_result = run_sim_func(
             {"architecture": modified_arch}, 
-            openai_key="", 
             monte_carlo_enabled=False, 
             attacker_skill=attacker_skill
         )
@@ -72,23 +71,26 @@ def simulate_node_hardening(
 
 def generate_attack_timeline(attack_steps: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    Converts static attack steps into an animated timeline progression.
+    Converts breach_time breakdown steps into an animated timeline progression.
+    
+    Expected input keys (from breach_time.py breakdown):
+        node, step_type, base_minutes, adjusted_minutes, modifier, port_adjustment
     """
     timeline = []
     accumulated_minutes = 0
     
     for i, step in enumerate(attack_steps):
-        duration = step.get('adjusted_minutes', 0)
+        duration = step.get('adjusted_minutes', step.get('base_minutes', 15))
         accumulated_minutes += duration
         
         timeline.append({
             "step": i + 1,
-            "node": step.get("node"),
+            "node": step.get("node", f"node_{i}"),
             "action": step.get("step_type", "Lateral Movement"),
             "time_delta": f"+{duration}m",
             "cumulative_time": f"{accumulated_minutes}m",
-            "privilege_level": step.get("privilege_level", "low"),
-            "success_probability": step.get("probability", 1.0)
+            "privilege_level": step.get("permission", "low"),
+            "success_probability": round(1.0 - (step.get("modifier", 1.0) * 0.1), 2)
         })
     
     return timeline

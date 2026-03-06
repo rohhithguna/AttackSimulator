@@ -13,6 +13,7 @@ Implements:
 """
 
 import networkx as nx
+import time
 from core.graph_engine import get_entry_points, get_highest_value_node
 from core.config_loader import get_config
 
@@ -95,6 +96,7 @@ def simulate_attack(G: nx.DiGraph, arch: dict) -> dict:
         "target"                : target,
         "path_count"            : len(ranked),
         "optimized_paths"       : opt_paths,
+        "all_paths"             : ranked,       # Exposed for reuse in main.py
     }
 
 
@@ -189,9 +191,19 @@ def _find_ranked_paths(G: nx.DiGraph, entry: str, target: str) -> list[list[str]
 
     config = get_config()
     max_depth = config.get("simulation", {}).get("max_dfs_depth", 12)
+    max_paths = config.get("simulation", {}).get("max_paths", 500)
+    path_timeout = config.get("simulation", {}).get("path_timeout_seconds", 10)
 
     try:
-        all_paths = list(nx.all_simple_paths(G, source=entry, target=target, cutoff=max_depth))
+        path_gen = nx.all_simple_paths(G, source=entry, target=target, cutoff=max_depth)
+        all_paths = []
+        t0 = time.perf_counter()
+        for p in path_gen:
+            all_paths.append(p)
+            if len(all_paths) >= max_paths:
+                break
+            if time.perf_counter() - t0 > path_timeout:
+                break
     except (nx.NetworkXNoPath, nx.NodeNotFound):
         return []
 

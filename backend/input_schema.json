@@ -8,14 +8,18 @@
       "properties": {
         "servers": {
           "type": "array",
-          "items": { "type": "string" },
+          "items": {
+            "type": "string"
+          },
           "minItems": 1
         },
         "connections": {
           "type": "array",
           "items": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": {
+              "type": "string"
+            },
             "minItems": 2,
             "maxItems": 2
           }
@@ -24,14 +28,20 @@
           "type": "object",
           "additionalProperties": {
             "type": "array",
-            "items": { "type": "integer" }
+            "items": {
+              "type": "integer"
+            }
           }
         },
         "permissions": {
           "type": "object",
           "additionalProperties": {
             "type": "string",
-            "enum": ["low", "medium", "high"]
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
           }
         },
         "asset_value": {
@@ -44,13 +54,22 @@
         },
         "public_facing": {
           "type": "array",
-          "items": { "type": "string" }
+          "items": {
+            "type": "string"
+          }
         }
       },
-      "required": ["servers", "connections"]
+      "required": [
+        "servers",
+        "connections"
+      ]
     },
-    "openai_key": { "type": "string" },
-    "monte_carlo": { "type": "boolean", "default": true }
+    "monte_carlo": {
+      "type": "boolean",
+      "default": true
+    }
   },
-  "required": ["architecture"]
+  "required": [
+    "architecture"
+  ]
 }

@@ -5,10 +5,16 @@ simulation:
   max_nodes: 1000
   max_edges: 5000
   max_dfs_depth: 12
+  max_paths: 500
+  path_timeout_seconds: 10
   monte_carlo_iterations: 1000
   monte_carlo_iteration_cap: 5000
 
 risk_model:
+  # Exposure base scores for graph_engine (entry exposure computation)
+  exposure_base_public: 0.6
+  exposure_base_internal: 0.1
+  # Scoring multiplier weights (used in scoring.py)
   exposure_weight_min: 1.0
   exposure_weight_max: 2.0
   privilege_weight_low: 0.8

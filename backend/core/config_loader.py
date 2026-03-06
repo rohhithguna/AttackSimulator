@@ -12,7 +12,7 @@ def get_config() -> dict:
     Load and return config from config.yaml.
     """
     global _CONFIG
-    if _CONFIG:
+    if _CONFIG is not None:
         return _CONFIG
     
     config_path = os.path.join(os.path.dirname(__file__), "..", "config.yaml")
@@ -23,10 +23,3 @@ def get_config() -> dict:
         _CONFIG = yaml.safe_load(f)
     
     return _CONFIG
-
-def get_limit(category: str, key: str, default):
-    """
-    Helper to get a specific limit.
-    """
-    config = get_config()
-    return config.get(category, {}).get(key, default)

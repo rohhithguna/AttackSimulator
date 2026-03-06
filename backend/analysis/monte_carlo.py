@@ -9,7 +9,7 @@ import time
 from analysis.probability import compute_path_probability
 from core.config_loader import get_config
 
-def run_monte_carlo(G: nx.DiGraph, all_paths: list[list[str]], iterations: int = 1000, skill_multiplier: float = 1.0) -> dict:
+def run_monte_carlo(G: nx.DiGraph, all_paths: list[list[str]], iterations: int = 1000, skill_multiplier: float = 1.0, seed: int = None) -> dict:
     """
     Run 1000 randomized exploit attempts on all simple paths.
     Compute breach success rate and average time if successful.
@@ -19,6 +19,10 @@ def run_monte_carlo(G: nx.DiGraph, all_paths: list[list[str]], iterations: int =
     
     # Enforce limit
     iterations = min(iterations, cap)
+    
+    # Optional seed for reproducibility
+    if seed is not None:
+        random.seed(seed)
 
     if not all_paths:
         return {
@@ -35,12 +39,17 @@ def run_monte_carlo(G: nx.DiGraph, all_paths: list[list[str]], iterations: int =
     path_probs = []
     for p in all_paths:
         path_probs.append(compute_path_probability(G, p, skill_multiplier))
+    
+    # Sort paths by probability descending for faster breach detection
+    paired = sorted(zip(path_probs, all_paths), key=lambda x: x[0], reverse=True)
+    path_probs = [p[0] for p in paired]
+    sorted_paths = [p[1] for p in paired]
 
     # Run simulations
     for _ in range(iterations):
         # We simulate an attacker attempting paths until one succeeds
         # To be conservative, we check all paths once per "attempt session"
-        for p_idx, p in enumerate(all_paths):
+        for p_idx, p in enumerate(sorted_paths):
             if random.random() < path_probs[p_idx]:
                 successful_breaches += 1
                 

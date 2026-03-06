@@ -13,8 +13,13 @@ Architecture:
 import networkx as nx
 import os
 from analysis.ml_exploit_predictor import extract_features, predict_exploit_probability
-from vulnerability_intelligence import VulnerabilityIntelligence
-from mitre_mapper import MitreMapper
+
+try:
+    from vulnerability_intelligence import VulnerabilityIntelligence
+    from mitre_mapper import MitreMapper
+    _VULN_INTEL_AVAILABLE = True
+except ImportError:
+    _VULN_INTEL_AVAILABLE = False
 
 # ---------------------------------------------------------------------------
 # Rule-based fallback constants (original logic)
@@ -30,15 +35,31 @@ PROB_CRED_REUSE     = 0.9
 _ML_BLEND_WEIGHT = 0.4  # 40% ML, 60% lateral movement
 
 # Initialize Vulnerability Intelligence and MITRE Mapper once at module level
-_NVD_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "nvd.json.gz")
-if not os.path.exists(_NVD_PATH):
-    _NVD_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "nvd.json.gz")
-if not os.path.exists(_NVD_PATH):
-    _NVD_PATH = "nvd.json.gz"
+vuln_intel = None
+mitre_mapper = None
 
-# Use lazy_load=True as required
-vuln_intel = VulnerabilityIntelligence(_NVD_PATH, lazy_load=True)
-mitre_mapper = MitreMapper()
+if _VULN_INTEL_AVAILABLE:
+    try:
+        _NVD_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "nvd.json.gz")
+        if not os.path.exists(_NVD_PATH):
+            _NVD_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "nvd.json.gz")
+        if not os.path.exists(_NVD_PATH):
+            _NVD_PATH = "nvd.json.gz"
+
+        # Validate dataset is not effectively empty (< 1KB = placeholder/empty)
+        if os.path.exists(_NVD_PATH) and os.path.getsize(_NVD_PATH) >= 1024:
+            vuln_intel = VulnerabilityIntelligence(_NVD_PATH, lazy_load=True)
+            mitre_mapper = MitreMapper()
+        else:
+            import warnings
+            warnings.warn(
+                f"[probability] NVD dataset too small ({os.path.getsize(_NVD_PATH) if os.path.exists(_NVD_PATH) else 0} bytes). "
+                "CVE-grounded probability disabled; using rule-based fallback.",
+                stacklevel=2,
+            )
+    except Exception:
+        vuln_intel = None
+        mitre_mapper = None
 
 def get_grounded_exploit_prob(node_data: dict) -> tuple[float | None, dict | None, dict | None]:
     """
@@ -46,7 +67,7 @@ def get_grounded_exploit_prob(node_data: dict) -> tuple[float | None, dict | Non
     Returns (probability, display_intel, raw_intel) or (None, None, None).
     """
     cves = node_data.get("cves", [])
-    if not cves:
+    if not cves or vuln_intel is None:
         return None, None, None
     
     best_prob = -1.0
@@ -199,7 +220,7 @@ def collect_vulnerability_intelligence(G: nx.DiGraph, path: list[str]) -> list[d
         node_data = G.nodes.get(node, {})
         _, display_intel, raw_intel = get_grounded_exploit_prob(node_data)
         
-        if display_intel and raw_intel:
+        if display_intel and raw_intel and mitre_mapper is not None:
             # Context for MITRE mapping
             is_priv_esc = False
             is_lateral_movement = i > 0

@@ -43,12 +43,15 @@ export interface TimelineStep {
   action: string;
   time_delta: string;
   privilege_level: string;
+  success_probability?: number;
+  cumulative_time?: string;
 }
 
 export interface PathCluster {
   cluster_type: string;
   count: number;
   representative_path: string[];
+  target_node?: string;
 }
 
 export interface SensitivityScenario {
@@ -82,7 +85,38 @@ export interface ResilienceSummary {
   confidence: number;
 }
 
+export interface DefenderRecommendation {
+  node: string;
+  reason: string;
+  priority_score: number;
+}
+
+export interface RLAttackerData {
+  rl_attack_path: string[];
+  expected_reward: number;
+  rl_vs_deterministic: string;
+}
+
+export interface OptimizedPaths {
+  min_friction: string[];
+  max_damage: string[];
+  fastest_breach: string[];
+}
+
+export interface AIProviderResult {
+  insight: string;
+  error: string | null;
+  provider: string;
+  model: string;
+}
+
 export interface SimulationResult {
+  // Status
+  status?: string;
+  request_id?: string;
+  execution_time?: number;
+  version?: string;
+
   // Attack paths
   paths: string[][];
   primary_path: string[];
@@ -95,6 +129,7 @@ export interface SimulationResult {
   target: string;
   attack_timeline?: TimelineStep[];
   path_clusters?: PathCluster[];
+  optimized_paths?: OptimizedPaths;
 
   // Risk
   risk_score: number;
@@ -117,13 +152,15 @@ export interface SimulationResult {
 
   // Probability & Simulation
   exploit_probability?: number;
+  vulnerability_intelligence?: Array<Record<string, unknown>>;
   breach_probability_overall?: number;
   monte_carlo_results?: {
     iterations: number;
     breach_success_rate: number;
     average_time_if_successful: string;
   };
-  choke_points?: Array<{ node: string; centrality: number }>;
+  choke_points?: Array<{ node: string; centrality: number; path_dependency_percent?: number; risk_reduction_if_hardened?: number; single_point_of_catastrophic_failure?: boolean }>;
+  centrality_scores?: Record<string, number>;
   harden_metrics?: HardenMetrics | null;
   sensitivity_analysis?: SensitivityAnalysis;
   resilience_summary?: ResilienceSummary;
@@ -159,7 +196,6 @@ export interface SimulationResult {
   ai: {
     executive_summary: string;
     technical_analysis: string;
-
     risk_justification: string;
     business_interpretation: string;
     mitigation_roadmap: string;
@@ -168,7 +204,21 @@ export interface SimulationResult {
     mitigation_strategy: string;
     business_impact: string;
     error: string | null;
+    // Dual-AI providers
+    edge_ai?: AIProviderResult;
+    cloud_ai?: AIProviderResult;
   };
+
+  // RL Attacker (Stage 6)
+  rl_attacker?: RLAttackerData;
+  rl_attack_path?: string[];
+  rl_expected_reward?: number;
+  rl_comparison?: string;
+
+  // Stage 4 Analytics
+  validation_score?: number | null;
+  matched_incident?: string | null;
+  defender_recommendations?: DefenderRecommendation[];
 
   // Graph
   graph: {
@@ -185,3 +235,4 @@ export interface SimulationResult {
   };
   error?: string;
 }
+

@@ -4,7 +4,7 @@ import path from "path";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { architecture, openai_key, attacker_skill, harden_node } = body;
+  const { architecture, attacker_skill, harden_node } = body;
 
   if (!architecture) {
     return NextResponse.json({ error: "Missing architecture field" }, { status: 400 });
@@ -19,7 +19,6 @@ export async function POST(req: NextRequest) {
 
   const result = await runPython(scriptPath, backendDir, {
     architecture,
-    openai_key: openai_key || "",
     attacker_skill: attacker_skill || 1.0,
     harden_node: harden_node || null
   });
@@ -34,11 +33,19 @@ export async function POST(req: NextRequest) {
   }
 }
 
-  function runPython(scriptPath: string, cwd: string, payload: object): Promise<string> {
-    return new Promise<string>((resolve, reject) => {
-      // Use venv python if available, otherwise fall back to system python
-      const venvPython = path.join(cwd, "..", ".venv", "bin", "python3");
-      const command = process.platform === "win32" ? "python" : venvPython;
+function runPython(scriptPath: string, cwd: string, payload: object): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const fs = require("fs");
+    // Fallback chain: venv python → system python3 → system python
+    const venvPython = path.join(cwd, "..", ".venv", "bin", "python3");
+    let command: string;
+    if (process.platform === "win32") {
+      command = "python";
+    } else if (fs.existsSync(venvPython)) {
+      command = venvPython;
+    } else {
+      command = "python3";
+    }
 
     const py = spawn(command, [scriptPath], {
       cwd,
@@ -48,10 +55,26 @@ export async function POST(req: NextRequest) {
     let stdout = "";
     let stderr = "";
 
+    // Timeout: kill after 180 seconds (increased from 60s to accommodate
+    // simulation + RL training + AI explanation pipeline)
+    const timeout = setTimeout(() => {
+      py.kill("SIGKILL");
+      // Return partial results instead of hard rejection
+      if (stdout.trim()) {
+        resolve(stdout);
+      } else {
+        resolve(JSON.stringify({
+          status: "error",
+          error: "Simulation timed out after 180 seconds. Try a smaller graph or disable Monte Carlo.",
+        }));
+      }
+    }, 180000);
+
     py.stdout.on("data", (data: Buffer) => { stdout += data.toString(); });
     py.stderr.on("data", (data: Buffer) => { stderr += data.toString(); });
 
     py.on("close", (code: number) => {
+      clearTimeout(timeout);
       if (code !== 0) {
         reject(new Error(`Python process exited with code ${code}: ${stderr}`));
       } else {
@@ -59,7 +82,10 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    py.on("error", (err: Error) => { reject(err); });
+    py.on("error", (err: Error) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
 
     py.stdin.write(JSON.stringify(payload));
     py.stdin.end();

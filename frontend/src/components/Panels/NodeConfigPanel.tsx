@@ -1,16 +1,12 @@
 'use client';
 
-import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  X, 
-  Settings2, 
-  Globe, 
-  ShieldAlert, 
-  Activity, 
-  Database,
-  Lock,
-  ChevronRight
+import React, { useCallback } from 'react';
+import {
+  X,
+  Globe,
+  ShieldAlert,
+  ChevronDown,
+  ChevronRight,
 } from 'lucide-react';
 import { useNodeStateStore } from '../../modules/nodeState';
 
@@ -31,181 +27,182 @@ const NodeConfigPanel: React.FC = () => {
   };
 
   return (
-    <AnimatePresence>
-      {selectedNodeId && (
-        <motion.div
-          initial={{ x: '100%' }}
-          animate={{ x: 0 }}
-          exit={{ x: '100%' }}
-          transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="fixed top-0 right-0 h-full w-[400px] bg-black/80 backdrop-blur-xl border-l border-gray-800 z-[100] shadow-2xl overflow-y-auto"
+    <div className="border-b border-[#E5E5E5]">
+      {/* Header */}
+      <div className="px-4 py-3 flex items-center justify-between border-b border-[#E5E5E5] bg-[#FAFAFA]">
+        <div>
+          <h2 className="text-[13px] font-semibold text-[#111]">Node Config</h2>
+          <p className="text-[11px] text-[#9CA3AF] font-mono">{selectedNode.id}</p>
+        </div>
+        <button
+          onClick={() => setSelectedNodeId(null)}
+          className="p-1.5 hover:bg-[#F3F4F6] rounded-md transition-colors text-[#9CA3AF] hover:text-[#111]"
         >
-          {/* Header */}
-          <div className="sticky top-0 p-6 flex items-center justify-between border-b border-gray-900 bg-black/40 backdrop-blur-md">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-gray-900 border border-gray-800 rounded-lg">
-                <Settings2 className="w-5 h-5 text-white" />
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="p-4 space-y-5">
+        {/* General */}
+        <Section title="General">
+          <div className="space-y-3">
+            <Field label="Node Name">
+              <input
+                type="text"
+                value={data.label}
+                onChange={(e) => handleUpdate('label', e.target.value)}
+                className="w-full bg-white border border-[#E5E5E5] rounded-md px-3 py-2 text-[13px] text-[#111] focus:outline-none focus:border-[#111] transition-colors"
+              />
+            </Field>
+
+            <div className="flex items-center justify-between py-2">
+              <div className="flex items-center gap-2">
+                <Globe className="w-4 h-4 text-[#9CA3AF]" />
+                <span className="text-[13px] text-[#374151]">Public Exposure</span>
               </div>
-              <div>
-                <h2 className="text-sm font-bold text-white uppercase tracking-widest">Node Config</h2>
-                <p className="text-[10px] font-mono text-gray-500 uppercase tracking-tighter">ID: {selectedNode.id}</p>
-              </div>
+              <button
+                onClick={() => handleUpdate('publicExposure', !data.publicExposure)}
+                className={`
+                  w-9 h-5 rounded-full relative transition-colors
+                  ${data.publicExposure ? 'bg-[#111]' : 'bg-[#E5E5E5]'}
+                `}
+              >
+                <div className={`
+                  absolute top-0.5 w-4 h-4 rounded-full transition-all bg-white shadow-sm
+                  ${data.publicExposure ? 'right-0.5' : 'left-0.5'}
+                `} />
+              </button>
             </div>
-            <button 
-              onClick={() => setSelectedNodeId(null)}
-              className="p-2 hover:bg-gray-900 border border-transparent hover:border-gray-800 rounded-lg transition-all text-gray-400 hover:text-white"
-            >
-              <X className="w-5 h-5" />
-            </button>
+          </div>
+        </Section>
+
+        {/* Network */}
+        <Section title="Network">
+          <Field label="Open Ports (comma separated)">
+            <input
+              type="text"
+              value={data.ports?.join(', ')}
+              onChange={(e) => handleUpdate('ports', e.target.value.split(',').map(s => s.trim()))}
+              className="w-full bg-white border border-[#E5E5E5] rounded-md px-3 py-2 text-[13px] text-[#111] focus:outline-none focus:border-[#111] transition-colors font-mono"
+              placeholder="80, 443, 22..."
+            />
+          </Field>
+        </Section>
+
+        {/* Security */}
+        <Section title="Security">
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Privilege Level">
+              <select
+                value={data.privilegeLevel}
+                onChange={(e) => handleUpdate('privilegeLevel', e.target.value)}
+                className="w-full bg-white border border-[#E5E5E5] rounded-md px-3 py-2 text-[13px] text-[#111] focus:outline-none focus:border-[#111] appearance-none"
+              >
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+              </select>
+            </Field>
+            <Field label="Data Criticality">
+              <select
+                value={data.dataCriticality}
+                onChange={(e) => handleUpdate('dataCriticality', e.target.value)}
+                className="w-full bg-white border border-[#E5E5E5] rounded-md px-3 py-2 text-[13px] text-[#111] focus:outline-none focus:border-[#111] appearance-none"
+              >
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+              </select>
+            </Field>
           </div>
 
-          <div className="p-8 space-y-8">
-            {/* Basic Info */}
-            <div className="space-y-4">
-              <h3 className="text-[10px] font-mono text-gray-500 uppercase tracking-[0.2em]">General Information</h3>
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] text-gray-500 font-mono uppercase">Node Name</label>
-                  <input
-                    type="text"
-                    value={data.label}
-                    onChange={(e) => handleUpdate('label', e.target.value)}
-                    className="w-full bg-gray-900 border border-gray-800 rounded-lg px-4 py-3 text-xs text-white focus:outline-none focus:border-white transition-all font-mono"
-                  />
-                </div>
-                <div className="flex items-center justify-between p-4 bg-gray-900/50 border border-gray-800 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <Globe className="w-4 h-4 text-gray-400" />
-                    <span className="text-xs text-gray-300 font-mono">Public Exposure</span>
+          {/* Vulnerabilities */}
+          <div className="mt-3">
+            <label className="text-[11px] text-[#9CA3AF] font-medium uppercase tracking-wide mb-1.5 block">Vulnerabilities</label>
+            <div className="space-y-1.5">
+              {data.vulnerabilitiesList.map((vuln: string, i: number) => (
+                <div key={i} className="flex items-center justify-between px-3 py-2 bg-red-50 border border-red-100 rounded-md">
+                  <div className="flex items-center gap-2">
+                    <ShieldAlert className="w-3.5 h-3.5 text-[#DC2626]" />
+                    <span className="text-[12px] text-[#DC2626] font-mono">{vuln}</span>
                   </div>
                   <button
-                    onClick={() => handleUpdate('publicExposure', !data.publicExposure)}
-                    className={`
-                      w-10 h-5 rounded-full relative transition-all duration-300
-                      ${data.publicExposure ? 'bg-white' : 'bg-gray-800'}
-                    `}
+                    onClick={() => {
+                      const newList = data.vulnerabilitiesList.filter((_: string, idx: number) => idx !== i);
+                      updateNodeData(selectedNode.id, {
+                        vulnerabilitiesList: newList,
+                        vulnerabilities: newList.length
+                      });
+                    }}
+                    className="text-[#D1D5DB] hover:text-[#DC2626] transition-colors"
                   >
-                    <div className={`
-                      absolute top-1 w-3 h-3 rounded-full transition-all duration-300
-                      ${data.publicExposure ? 'right-1 bg-black' : 'left-1 bg-gray-500'}
-                    `} />
+                    <X className="w-3 h-3" />
                   </button>
                 </div>
-              </div>
-            </div>
-
-            {/* Network */}
-            <div className="space-y-4">
-              <h3 className="text-[10px] font-mono text-gray-500 uppercase tracking-[0.2em]">Network Access</h3>
-              <div className="space-y-1.5">
-                <label className="text-[10px] text-gray-500 font-mono uppercase">Open Ports (comma separated)</label>
-                <div className="flex items-center gap-2 p-3 bg-gray-900 border border-gray-800 rounded-lg">
-                  <Activity className="w-4 h-4 text-gray-600" />
-                  <input
-                    type="text"
-                    value={data.ports?.join(', ')}
-                    onChange={(e) => handleUpdate('ports', e.target.value.split(',').map(s => s.trim()))}
-                    className="flex-1 bg-transparent text-xs text-white focus:outline-none font-mono"
-                    placeholder="80, 443, 22..."
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Security */}
-            <div className="space-y-4">
-              <h3 className="text-[10px] font-mono text-gray-500 uppercase tracking-[0.2em]">Security State</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] text-gray-500 font-mono uppercase">Privilege Level</label>
-                  <select
-                    value={data.privilegeLevel}
-                    onChange={(e) => handleUpdate('privilegeLevel', e.target.value)}
-                    className="w-full bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none appearance-none font-mono"
-                  >
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                  </select>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[10px] text-gray-500 font-mono uppercase">Data Criticality</label>
-                  <select
-                    value={data.dataCriticality}
-                    onChange={(e) => handleUpdate('dataCriticality', e.target.value)}
-                    className="w-full bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none appearance-none font-mono"
-                  >
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] text-gray-500 font-mono uppercase">Vulnerabilities</label>
-                <div className="space-y-2">
-                  {data.vulnerabilitiesList.map((vuln, i) => (
-                    <div key={i} className="flex items-center justify-between p-3 bg-red-950/20 border border-red-900/30 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <ShieldAlert className="w-4 h-4 text-red-500" />
-                        <span className="text-[10px] text-red-200 font-mono uppercase">{vuln}</span>
-                      </div>
-                      <button 
-                        onClick={() => {
-                          const newList = data.vulnerabilitiesList.filter((_, idx) => idx !== i);
-                          updateNodeData(selectedNode.id, {
-                            vulnerabilitiesList: newList,
-                            vulnerabilities: newList.length
-                          });
-                        }}
-                        className="text-red-900 hover:text-red-500 transition-colors"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))}
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      placeholder="CVE-XXXX-XXXX"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          const val = (e.target as HTMLInputElement).value;
-                          if (val) {
-                            const newList = [...data.vulnerabilitiesList, val];
-                            updateNodeData(selectedNode.id, {
-                              vulnerabilitiesList: newList,
-                              vulnerabilities: newList.length
-                            });
-                            (e.target as HTMLInputElement).value = '';
-                          }
-                        }
-                      }}
-                      className="flex-1 bg-gray-900 border border-gray-800 rounded-lg px-4 py-2 text-[10px] text-white focus:outline-none focus:border-red-900 transition-all font-mono"
-                    />
-                  </div>
-                </div>
-              </div>
+              ))}
+              <input
+                type="text"
+                placeholder="CVE-XXXX-XXXX (press Enter)"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const val = (e.target as HTMLInputElement).value;
+                    if (val) {
+                      const newList = [...data.vulnerabilitiesList, val];
+                      updateNodeData(selectedNode.id, {
+                        vulnerabilitiesList: newList,
+                        vulnerabilities: newList.length
+                      });
+                      (e.target as HTMLInputElement).value = '';
+                    }
+                  }
+                }}
+                className="w-full bg-white border border-[#E5E5E5] rounded-md px-3 py-2 text-[12px] text-[#111] focus:outline-none focus:border-[#111] transition-colors font-mono"
+              />
             </div>
           </div>
-          
-          <div className="p-8 border-t border-gray-900 mt-auto">
-            <div className="p-4 bg-white/5 rounded-xl border border-white/10 space-y-3">
-              <div className="flex items-center gap-2">
-                <Lock className="w-3 h-3 text-white" />
-                <span className="text-[10px] font-mono text-white uppercase tracking-widest">Asset Value</span>
-              </div>
-              <p className="text-[10px] text-gray-500 leading-relaxed font-mono">
-                Asset value is calculated based on privilege level and data criticality. 
-                Current risk score: <span className="text-white">{(data.privilegeLevel === 'High' ? 5 : 2) * (data.dataCriticality === 'High' ? 5 : 2)}</span>
-              </p>
-            </div>
+        </Section>
+
+        {/* Asset Value */}
+        <Section title="Asset Value">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[12px] text-[#6B7280]">Value (1-10)</span>
+            <span className="text-[14px] font-semibold text-[#111] tabular-nums">{(data as any).assetValue || 5}</span>
           </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+          <input
+            type="range"
+            min={1}
+            max={10}
+            step={1}
+            value={(data as any).assetValue || 5}
+            onChange={(e) => handleUpdate('assetValue', parseInt(e.target.value, 10))}
+            className="w-full h-1 bg-[#E5E5E5] rounded-full appearance-none cursor-pointer accent-[#111]"
+          />
+          <div className="flex justify-between text-[10px] text-[#D1D5DB] mt-1">
+            <span>Low</span>
+            <span>Medium</span>
+            <span>High</span>
+            <span>Critical</span>
+          </div>
+        </Section>
+      </div>
+    </div>
   );
 };
+
+/* ── Helpers ───────────────────────────────────────── */
+
+const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+  <div>
+    <h3 className="text-[11px] font-semibold text-[#9CA3AF] uppercase tracking-wide mb-3">{title}</h3>
+    {children}
+  </div>
+);
+
+const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
+  <div className="space-y-1.5">
+    <label className="text-[11px] text-[#9CA3AF] font-medium uppercase tracking-wide">{label}</label>
+    {children}
+  </div>
+);
 
 export default NodeConfigPanel;

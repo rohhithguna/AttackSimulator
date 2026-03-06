@@ -1,146 +1,93 @@
 'use client';
 
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { usePathname } from 'next/navigation';
-import Link from 'next/link';
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  LayoutGrid, 
-  Shield, 
-  FileText, 
-  Settings, 
-  Activity, 
-  Database, 
-  Terminal, 
-  HelpCircle,
-  BarChart3,
-  Layers,
-  Zap,
-  Cpu
+import React from 'react';
+import {
+  Server,
+  Cpu,
+  Cloud,
+  HardDrive,
+  Monitor,
+  Database,
+  Shield,
+  GripVertical,
 } from 'lucide-react';
-import { useWorkspaceStore } from '@/modules/workspaceState';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import type { InfrastructureNodeType } from '../Nodes/InfrastructureNode';
 
-const NAV_ITEMS = [
-  { id: 'dashboard', icon: LayoutGrid, label: 'Dashboard', path: '/dashboard' },
-  { id: 'simulator', icon: Shield, label: 'Simulator', path: '/simulator' },
-  { id: 'reports', icon: FileText, label: 'Reports', path: '/reports' },
+interface NodePaletteItem {
+  type: InfrastructureNodeType;
+  label: string;
+  icon: React.ElementType;
+  defaultPorts: string[];
+  defaultPrivilege: 'Low' | 'Medium' | 'High';
+  defaultCriticality: 'Low' | 'Medium' | 'High';
+  defaultAssetValue: number;
+}
+
+const NODE_PALETTE: NodePaletteItem[] = [
+  { type: 'WebServer', label: 'Web Server', icon: Server, defaultPorts: ['80', '443'], defaultPrivilege: 'Low', defaultCriticality: 'Low', defaultAssetValue: 3 },
+  { type: 'AppServer', label: 'App Server', icon: Cpu, defaultPorts: ['8080'], defaultPrivilege: 'Medium', defaultCriticality: 'Medium', defaultAssetValue: 5 },
+  { type: 'Database', label: 'Database', icon: Database, defaultPorts: ['3306'], defaultPrivilege: 'High', defaultCriticality: 'High', defaultAssetValue: 8 },
+  { type: 'Firewall', label: 'Firewall', icon: Shield, defaultPorts: ['443'], defaultPrivilege: 'High', defaultCriticality: 'Low', defaultAssetValue: 2 },
+  { type: 'Storage', label: 'Storage', icon: HardDrive, defaultPorts: ['22'], defaultPrivilege: 'High', defaultCriticality: 'High', defaultAssetValue: 9 },
+  { type: 'CloudInstance', label: 'Cloud Instance', icon: Cloud, defaultPorts: ['22', '443'], defaultPrivilege: 'Medium', defaultCriticality: 'Medium', defaultAssetValue: 6 },
+  { type: 'Workstation', label: 'Workstation', icon: Monitor, defaultPorts: ['3389'], defaultPrivilege: 'Low', defaultCriticality: 'Low', defaultAssetValue: 3 },
 ];
 
-const SECONDARY_NAV = [
-  { id: 'assets', icon: Database, label: 'Asset Inventory', path: '#' },
-  { id: 'vulnerabilities', icon: Activity, label: 'Vulnerabilities', path: '#' },
-  { id: 'infrastructure', icon: Cpu, label: 'Compute Infrastructure', path: '#' },
-  { id: 'logs', icon: Terminal, label: 'Operational Logs', path: '#' },
-];
-
-const LeftNav: React.FC = () => {
-  const { isSidebarCollapsed, toggleSidebar } = useWorkspaceStore();
-  const pathname = usePathname();
+const DraggableNode = ({ item }: { item: NodePaletteItem }) => {
+  const onDragStart = (event: React.DragEvent) => {
+    event.dataTransfer.setData('application/reactflow-type', item.type);
+    event.dataTransfer.setData('application/reactflow-label', item.label);
+    event.dataTransfer.setData('application/reactflow-ports', JSON.stringify(item.defaultPorts));
+    event.dataTransfer.setData('application/reactflow-privilege', item.defaultPrivilege);
+    event.dataTransfer.setData('application/reactflow-criticality', item.defaultCriticality);
+    event.dataTransfer.setData('application/reactflow-assetvalue', String(item.defaultAssetValue));
+    event.dataTransfer.effectAllowed = 'move';
+  };
 
   return (
-    <motion.aside
-      animate={{ width: isSidebarCollapsed ? 72 : 280 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-      className="h-full bg-black border-r border-neutral-900 flex flex-col relative z-50 shrink-0"
+    <div
+      draggable
+      onDragStart={onDragStart}
+      className="flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-grab active:cursor-grabbing
+        bg-white border border-[#E5E5E5] hover:bg-[#F3F4F6] hover:border-[#D1D5DB]
+        transition-colors group select-none"
     >
-      <div className="p-6 flex items-center justify-between mb-8">
-        <div className="flex items-center gap-3 overflow-hidden">
-          <div className="w-8 h-8 bg-white rounded flex items-center justify-center shrink-0">
-            <span className="text-black font-bold text-lg leading-none italic">A</span>
-          </div>
-          {!isSidebarCollapsed && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex flex-col"
-            >
-              <span className="text-white font-bold text-sm tracking-tight leading-none">ATTACK OPS</span>
-              <span className="text-neutral-500 text-[10px] uppercase font-bold tracking-widest mt-1">SIMULATOR V1</span>
-            </motion.div>
-          )}
-        </div>
-      </div>
-
-      <nav className="flex-1 px-4 space-y-8">
-        <div className="space-y-1">
-          {NAV_ITEMS.map((item) => (
-            <NavItem key={item.id} item={item} collapsed={isSidebarCollapsed} active={pathname === item.path} />
-          ))}
-        </div>
-
-        <div className="space-y-1">
-          {!isSidebarCollapsed && (
-            <div className="px-4 py-2 text-[10px] text-neutral-600 font-bold uppercase tracking-widest">
-              Analysis
-            </div>
-          )}
-          {SECONDARY_NAV.map((item) => (
-            <NavItem key={item.id} item={item} collapsed={isSidebarCollapsed} active={pathname === item.path} />
-          ))}
-        </div>
-      </nav>
-
-      <div className="p-4 border-t border-neutral-900 space-y-1">
-        <NavItem 
-          item={{ id: 'help', icon: HelpCircle, label: 'Documentation', path: '#' }} 
-          collapsed={isSidebarCollapsed} 
-          active={false}
-        />
-        <NavItem 
-          item={{ id: 'settings', icon: Settings, label: 'Settings', path: '#' }} 
-          collapsed={isSidebarCollapsed} 
-          active={false}
-        />
-      </div>
-
-      <button
-        onClick={toggleSidebar}
-        className="absolute -right-3 top-20 w-6 h-6 bg-neutral-900 border border-neutral-800 rounded-full flex items-center justify-center text-neutral-500 hover:text-white transition-colors"
-      >
-        {isSidebarCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-      </button>
-    </motion.aside>
+      <GripVertical size={12} className="text-[#D1D5DB] group-hover:text-[#9CA3AF] transition-colors shrink-0" />
+      <item.icon size={16} strokeWidth={1.5} className="text-[#6B7280] group-hover:text-[#111] transition-colors shrink-0" />
+      <span className="text-[13px] font-medium text-[#374151] group-hover:text-[#111] transition-colors">
+        {item.label}
+      </span>
+    </div>
   );
 };
 
-const NavItem = ({ item, collapsed, active }: { item: any, collapsed: boolean, active: boolean }) => {
+const LeftNav: React.FC = () => {
   return (
-    <TooltipProvider>
-      <Tooltip delayDuration={0}>
-        <TooltipTrigger asChild>
-          <Link href={item.path}>
-            <button
-              className={`w-full flex items-center px-4 py-2.5 rounded-lg group transition-all duration-200 ${
-                active ? 'bg-white text-black shadow-lg shadow-white/5' : 'text-neutral-500 hover:text-white hover:bg-neutral-900'
-              }`}
-            >
-              <item.icon 
-                size={18} 
-                strokeWidth={1.5} 
-                className={`shrink-0 ${active ? 'text-black' : 'text-neutral-500 group-hover:text-white'}`}
-              />
-              {!collapsed && (
-                <motion.span
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="ml-3 text-xs font-medium truncate"
-                >
-                  {item.label}
-                </motion.span>
-              )}
-            </button>
-          </Link>
-        </TooltipTrigger>
-        {collapsed && (
-          <TooltipContent side="right" className="bg-white text-black border-none text-[11px] font-bold px-3 py-1.5 ml-2 uppercase tracking-tight">
-            {item.label}
-          </TooltipContent>
-        )}
-      </Tooltip>
-    </TooltipProvider>
+    <aside className="w-[260px] h-full bg-[#F7F7F7] border-r border-[#E5E5E5] flex flex-col shrink-0">
+      {/* Logo */}
+      <div className="px-5 py-4 flex items-center gap-3 border-b border-[#E5E5E5]">
+        <div className="w-7 h-7 bg-[#111] rounded-md flex items-center justify-center shrink-0">
+          <span className="text-white font-bold text-sm leading-none">A</span>
+        </div>
+        <div>
+          <div className="text-[13px] font-semibold text-[#111] leading-none">Attack Simulator</div>
+          <div className="text-[11px] text-[#9CA3AF] mt-0.5">v2.0</div>
+        </div>
+      </div>
+
+      {/* Node Palette */}
+      <div className="flex-1 overflow-y-auto custom-scrollbar px-3 py-4">
+        <div className="px-2 mb-3">
+          <h3 className="text-[11px] font-semibold text-[#9CA3AF] uppercase tracking-wider">Infrastructure Nodes</h3>
+          <p className="text-[11px] text-[#D1D5DB] mt-1">Drag onto canvas</p>
+        </div>
+        <div className="space-y-1.5">
+          {NODE_PALETTE.map((item) => (
+            <DraggableNode key={item.type} item={item} />
+          ))}
+        </div>
+      </div>
+    </aside>
   );
 };
 

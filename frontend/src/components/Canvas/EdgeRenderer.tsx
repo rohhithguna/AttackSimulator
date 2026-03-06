@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { memo } from 'react';
 import { BaseEdge, EdgeProps, getSmoothStepPath } from '@xyflow/react';
 
 const NetworkEdge = ({
@@ -22,61 +22,31 @@ const NetworkEdge = ({
     targetX,
     targetY,
     targetPosition,
-    borderRadius: 16,
+    borderRadius: 12,
   });
 
   return (
     <>
-      {/* Background shadow for attack path */}
-      {animated && (
-        <path
-          d={edgePath}
-          fill="none"
-          stroke="#ef4444"
-          strokeWidth={4}
-          strokeOpacity={0.2}
-          className="blur-sm"
-        />
-      )}
-      
       <BaseEdge
         path={edgePath}
         markerEnd={markerEnd}
         style={{
           ...style,
           strokeWidth: animated ? 2 : 1.5,
-          stroke: animated ? '#ef4444' : (style.stroke || '#1a1a1a'),
-          transition: 'all 0.5s ease'
+          stroke: animated ? '#DC2626' : (style.stroke || '#D1D5DB'),
         }}
       />
-      
-      {/* Active data flow animation */}
-      <circle r={animated ? 2 : 1.5} fill={animated ? '#ef4444' : '#ffffff22'}>
+
+      {/* Subtle flow animation dot */}
+      <circle r={animated ? 2.5 : 1.5} fill={animated ? '#DC2626' : '#D1D5DB'}>
         <animateMotion
-          dur={animated ? "1.5s" : "4s"}
+          dur={animated ? '1.5s' : '5s'}
           repeatCount="indefinite"
           path={edgePath}
         />
       </circle>
-      
-      {/* Glow effect for attack path */}
-      {animated && (
-        <circle r="3" fill="#ef4444">
-          <animateMotion
-            dur="1.5s"
-            repeatCount="indefinite"
-            path={edgePath}
-          />
-          <animate
-            attributeName="opacity"
-            values="1;0.5;1"
-            dur="1.5s"
-            repeatCount="indefinite"
-          />
-        </circle>
-      )}
     </>
   );
 };
 
-export default NetworkEdge;
+export default memo(NetworkEdge);

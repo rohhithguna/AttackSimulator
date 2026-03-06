@@ -1,0 +1,1176 @@
+================================================================================
+              AI ATTACK SIMULATION AGENT — COMPLETE TECHNICAL DOCUMENTATION
+================================================================================
+
+Version: 1.0.0-production
+Generated: March 2026
+Repository: attackfinal/
+
+================================================================================
+TABLE OF CONTENTS
+================================================================================
+
+  1.  PROJECT OVERVIEW
+  2.  SYSTEM ARCHITECTURE
+  3.  BACKEND ENGINE
+  4.  ATTACK SIMULATION PIPELINE
+  5.  FRONTEND ARCHITECTURE
+  6.  STATE MANAGEMENT
+  7.  DATA MODEL
+  8.  AI COMPONENTS
+  9.  VISUALIZATION SYSTEM
+  10. CURRENT LIMITATIONS
+  11. IMPROVEMENT OPPORTUNITIES
+
+================================================================================
+1. PROJECT OVERVIEW
+================================================================================
+
+1.1 PURPOSE
+-----------
+The AI Attack Simulation Agent is a full-stack cybersecurity platform that
+simulates adversarial attacks on user-defined infrastructure topologies. It
+enables security engineers, red-team analysts, and CISOs to model their
+network architecture as a directed graph, then execute automated attack
+simulations to discover viable breach paths, assess risk, estimate breach
+time, and generate AI-powered remediation strategies.
+
+The system answers the question: "If an attacker targets my infrastructure,
+what is the most likely attack path, how dangerous is it, and what should I
+fix first?"
+
+1.2 CONCEPT
+-----------
+The platform models infrastructure as a directed graph where:
+  - Nodes represent servers, databases, storage, firewalls, cloud instances,
+    and workstations, each with attributes like open ports, privilege level,
+    asset value, and public exposure.
+  - Edges represent network connections between nodes, carrying weight and
+    friction attributes that influence path traversal cost.
+
+An automated attacker agent traverses this graph from public-facing entry
+points toward high-value targets, exploiting vulnerabilities along the way.
+The system then scores the discovered attack paths across multiple dimensions:
+structural risk, exploit probability, breach time, business impact, and
+confidence.
+
+1.3 DEVELOPMENT STAGES
+-----------------------
+The project was built incrementally across six stages:
+
+  Stage 1: Core simulation engine (parser, graph, attack engine)
+  Stage 2: Analysis pipeline (scoring, breach time, confidence, business impact)
+  Stage 3: Advanced analytics (probability modeling, Monte Carlo, centrality,
+           weighted path optimization, advanced risk formula)
+  Stage 4: Productization (config management, historical validation, defender
+           prioritization, JSON schema validation)
+  Stage 4.5: Extensions (node hardening sandbox, sensitivity analysis, path
+             clustering, attack timeline generation)
+  Stage 6: AI/ML integration (RL attacker, ML exploit predictor, AI explainer,
+           vulnerability intelligence, MITRE ATT&CK mapping)
+
+1.4 TECHNOLOGY STACK
+---------------------
+  Backend:
+    - Python 3.x
+    - NetworkX (graph operations)
+    - scikit-learn (ML model inference)
+    - OpenAI GPT-4o (AI explanations)
+    - PyYAML (configuration)
+    - jsonschema (input validation)
+
+  Frontend:
+    - Next.js 15.5 (with Turbopack)
+    - React 19.2
+    - TypeScript
+    - @xyflow/react (React Flow — visual graph canvas)
+    - Zustand (state management)
+    - Tailwind CSS 4
+    - Lucide React (icons)
+    - Framer Motion (animations)
+
+
+================================================================================
+2. SYSTEM ARCHITECTURE
+================================================================================
+
+2.1 HIGH-LEVEL ARCHITECTURE
+-----------------------------
+
+  +------------------+      +------------------+      +------------------+
+  |                  |      |                  |      |                  |
+  |   Visual UI      | ---> |   Next.js API    | ---> |   Python Engine  |
+  |   (React Flow)   |      |   Route Layer    |      |   (main.py)      |
+  |                  |      |                  |      |                  |
+  +------------------+      +------------------+      +------------------+
+        ^                         |                         |
+        |                         |                         v
+        |                    spawn child             +------------------+
+        |                    process                 |  Analysis Suite  |
+        |                         |                  |  (12 modules)    |
+        |                         v                  +------------------+
+        |                   Python stdin/stdout            |
+        |                         |                         v
+        +-------------------------+                  +------------------+
+              JSON response                          |  AI/ML Layer     |
+                                                     |  (GPT-4o, sklearn)|
+                                                     +------------------+
+
+2.2 LAYER DESCRIPTIONS
+-----------------------
+
+Frontend Layer (Next.js + React):
+  The user interface is a visual node-based builder powered by React Flow.
+  Users drag infrastructure components onto a canvas, connect them via edges,
+  configure node properties (ports, privileges, asset values), and trigger
+  simulations. Results are displayed in a right-side inspector panel with
+  tabs for metrics, paths, defender recommendations, and AI analysis.
+
+API Layer (Next.js API Route):
+  A single POST endpoint at /api/simulate acts as a bridge. It receives
+  the serialized graph JSON from the frontend, spawns the Python backend
+  as a child process, passes the payload via stdin, and reads the JSON
+  result from stdout. The process has a 60-second timeout.
+
+  The API route auto-detects the Python interpreter using a fallback chain:
+    1. .venv/bin/python3 (virtual environment)
+    2. python3 (system)
+    3. python (Windows fallback)
+
+Python Simulation Engine (backend/main.py):
+  The 450-line main.py orchestrates the entire simulation pipeline. It reads
+  JSON from stdin, runs validation, builds the graph, executes the attack
+  simulation, performs 12+ analysis passes, generates AI explanations, and
+  outputs a comprehensive JSON result to stdout.
+
+Analysis Suite (backend/analysis/):
+  Eleven specialized modules compute different risk dimensions:
+    scoring, breach_time, confidence, business_impact, probability,
+    monte_carlo, centrality, ai_explainer, ml_exploit_predictor,
+    analysis_extensions
+
+AI/ML Layer:
+  Three AI components extend the deterministic engine:
+    1. ML Exploit Predictor (scikit-learn model)
+    2. AI Explainer (OpenAI GPT-4o)
+    3. RL Attacker (Q-Learning agent)
+
+2.3 EXECUTION PIPELINE SUMMARY
+--------------------------------
+
+  1. User builds graph in visual editor
+  2. Frontend serializes graph to backend JSON schema
+  3. Frontend POSTs to /api/simulate
+  4. API route spawns Python child process
+  5. Python validates input against JSON schema
+  6. Parser normalizes architecture data
+  7. Graph engine builds NetworkX DiGraph
+  8. Attack engine finds ranked paths + optimized paths
+  9. Analysis suite runs 12+ passes (scoring, time, probability, etc.)
+  10. AI explainer generates structured explanation
+  11. RL attacker discovers alternative paths
+  12. Historical validator matches against known breaches
+  13. Defender prioritizer ranks remediation targets
+  14. Complete JSON result sent to stdout
+  15. API route returns JSON to frontend
+  16. Frontend animates attack path and displays results
+
+
+================================================================================
+3. BACKEND ENGINE
+================================================================================
+
+3.1 CORE MODULES (backend/core/)
+---------------------------------
+
+3.1.1 config_loader.py
+  Purpose: Singleton configuration loader.
+  Implementation: Loads config.yaml once at first call and caches the result
+  in a module-level global (_CONFIG). Provides get_config() and get_limit()
+  helpers.
+
+  Configuration sections:
+    simulation:     max_nodes, max_edges, max_dfs_depth, path_timeout, etc.
+    risk_model:     exposure weights, privilege weights, depth weights
+    probability_model: CVE probability constants
+    centrality_thresholds: critical node percentage
+    time_estimation: base minutes per step type
+
+3.1.2 validator.py
+  Purpose: JSON schema validation for simulation inputs.
+  Implementation: Loads input_schema.json and validates the incoming payload
+  using the jsonschema library. Returns structured error responses with
+  error_type, message, and JSON path for ValidationError instances.
+
+3.1.3 parser.py
+  Purpose: Validates and normalizes architecture input data.
+  Implementation:
+    - Accepts JSON string or dict input
+    - Enforces max_nodes and max_edges limits from config
+    - Validates 6 required fields: servers, connections, open_ports,
+      permissions, asset_value, public_facing
+    - Validates connection integrity (source/target must exist in servers)
+    - Validates permission values against {low, medium, high}
+    - Validates asset values are numeric
+    - Normalizes output with defaults for missing entries
+    - Raises ParseError (subclass of ValueError) on invalid input
+
+3.1.4 graph_engine.py
+  Purpose: Builds a directed NetworkX graph from parsed architecture data.
+  Implementation:
+    - Creates nx.DiGraph with performance guards
+    - Each node receives computed attributes:
+        exposure_score:      0-1, based on public exposure + risky ports
+        privilege_weight:    0.8 (low), 1.2 (medium), 1.5 (high)
+        vulnerability_score: exposure * 0.8 + SSH bonus
+    - Each edge carries:
+        weight:   1.0 / (dst_asset_value + 0.001) — lower = more attractive
+        friction: 0.5 (from public) or 0.2 (internal)
+
+  Exposure Scoring Algorithm:
+    base = 0.6 (public) or 0.1 (internal)
+    + 0.20 if port 22 open (SSH)
+    + 0.15 if port 80/443 open (HTTP/HTTPS)
+    + 0.25 if port 3306/5432/27017 open (database)
+    Capped at 1.0.
+
+  Helper functions:
+    get_entry_points():      returns public-facing nodes
+    get_highest_value_node(): returns node with max asset_value
+    graph_summary():          returns human-readable overview
+
+3.1.5 attack_engine.py
+  Purpose: Core attack simulation — path finding, ranking, and chain building.
+  Implementation: 322 lines implementing a multi-phase attack simulation.
+
+  Phase 1 — Entry Point Selection:
+    Selects the public-facing node with the highest exposure_score as the
+    attacker's initial foothold.
+
+  Phase 2 — Ranked Path Finding (_find_ranked_paths):
+    Uses nx.all_simple_paths() with cutoff=12 to enumerate all simple paths
+    from entry to target (highest asset_value node). Paths are collected with
+    a cap of 500 paths and a 10-second timeout.
+
+    Path Risk Scoring Formula:
+      path_risk = sum(asset_value) * avg(exposure_score) * max(privilege_weight)
+    Paths are sorted descending by risk score.
+
+  Phase 3 — Weighted Path Optimization (compute_weighted_paths):
+    Constructs three specialized graph copies with custom edge weights:
+
+    1. Minimum Friction (most realistic attacker path):
+       weight = edge_friction / (vuln_score * exposure * priv_weight + 0.001)
+       Finds the path of least resistance using Dijkstra.
+
+    2. Maximum Damage (worst-case scenario):
+       weight = 1.0 / (asset_value * priv_weight + 0.001)
+       Finds the path hitting highest-value assets.
+
+    3. Fastest Breach (minimum time-to-compromise):
+       weight = time estimate per hop based on ports + privilege modifier
+       Finds the path with shortest estimated breach time.
+
+  Phase 4 — Vulnerability Chain Construction (_build_chain):
+    Walks the primary path and assigns attack step types:
+      - Entry node:  "Initial Exploit" + port-based vulnerability detection
+      - Intermediate: "Lateral Movement" + optional privilege escalation
+      - Final node:  "Data Exfiltration" + privilege escalation if needed
+
+    Vulnerability labels assigned based on ports:
+      Port 22:           SSH Brute-Force
+      Port 80/443:       Web Application Exploit
+      Port 3306/5432/27017: Exposed Database Port
+      Privilege boundary: Privilege Escalation via Low-Privilege Account
+      Intermediate:      Lateral Movement via Internal Trust
+      Final target:      Data Exfiltration from High-Value Asset
+
+3.2 ANALYSIS MODULES (backend/analysis/)
+------------------------------------------
+
+3.2.1 scoring.py — Risk Scoring
+  Purpose: Computes structural risk score with severity classification.
+
+  Stage 2 Formula:
+    risk_score = exposure_weight * privilege_weight * asset_value_weight * depth_weight
+
+  Weight calculations:
+    exposure_weight:     1.0 + avg(exposure_score across path) → range 1.1-2.0
+    privilege_weight:    max(privilege_weight on path) → range 0.8-1.5
+    asset_value_weight:  max(asset_value on path) / 5.0 → range 0.2-2.0
+    depth_weight:        1.0 + (hops - 1) * 0.3, capped at 2.5
+
+  Severity thresholds:
+    >= 13: Critical (purple #8e44ad)
+    >= 9:  High (red #e74c3c)
+    >= 5:  Medium (orange #f39c12)
+    >= 0:  Low (green #2ecc71)
+
+  Stage 3 Advanced Risk Formula:
+    advanced_risk = (structural_risk × exploit_probability × impact_multiplier)
+                    ÷ log(time_to_breach + 1)
+
+3.2.2 breach_time.py — Time-to-Breach Estimation
+  Purpose: Estimates total breach time from attack step sequence.
+
+  Base times (minutes):
+    Initial Exploit:      30
+    Privilege Escalation: 20
+    Lateral Movement:     15
+    Data Exfiltration:    25
+
+  Modifiers:
+    Privilege: low=0.75x, medium=1.0x, high=1.4x
+    Port bonuses: SSH(-5), HTTP(-3), HTTPS(-3), DB(-8)
+
+  Each step: adjusted = max(5, base × privilege_modifier + port_bonus)
+  Output includes per-step breakdown and human-readable display string.
+
+3.2.3 confidence.py — Confidence Scoring
+  Purpose: Measures simulation certainty about the identified attack path.
+  Output range: 0-100 (integer percentage), clamped to [10, 97].
+
+  Scoring model (additive):
+    Base:                          +80
+    Direct exposure bonus:         +10 (public entry, ≤2 hops)
+    Known port vector bonus:       +5 (risky ports on entry)
+    Speculation penalty:           -8 (no risky ports)
+    Chain length penalty:          -5 per hop beyond 2
+    Lateral movement penalty:      -4 per lateral step
+    High exposure bonus:           +5 (exposure ≥ 0.8)
+    Low exposure penalty:          -5 (exposure < 0.3)
+    Privilege escalation penalty:  -3 per priv-esc step
+    Exploit realism bonus:         +8 (path probability ≥ 0.7)
+    Exploit difficulty penalty:    -5 (path probability < 0.2)
+
+  Labels: Very High (≥80), High (≥65), Moderate (≥45), Low (<45)
+
+3.2.4 business_impact.py — Business Impact Assessment
+  Purpose: Deterministic rule-based business impact modeling.
+  Outputs three risk dimensions: data_risk, operational_risk, compliance_risk.
+
+  Data Risk Logic:
+    - CRITICAL: target asset_value ≥ 7 AND severity Critical/High
+    - ELEVATED: target asset_value ≥ 7 AND severity Medium/Low
+    - MODERATE: high-value intermediary nodes on path
+    - LOW: no high-value assets on path
+
+  Operational Risk Logic:
+    - RAPID COMPROMISE: breach < 60 minutes AND confidence ≥ 65%
+    - SIGNIFICANT DISRUPTION: severity Critical/High
+    - MODERATE: path ≥ 3 hops (cascading risk)
+    - LIMITED: short, contained path
+
+  Compliance Risk Logic:
+    Checks for GDPR/CCPA (DB nodes + high asset value),
+    SOC 2/ISO 27001 (high-privilege nodes compromised),
+    PCI DSS (risk score ≥ 9),
+    NIST CSF (multiple public-facing nodes).
+
+3.2.5 probability.py — Exploit Probability Modeling
+  Purpose: Computes path success probability using a hierarchical approach.
+  Architecture: CVE Intelligence > ML Prediction > Rule-Based Fallback
+
+  Entry Node Probability:
+    1. Grounded CVE probability (from VulnerabilityIntelligence + CVSS metrics)
+    2. ML model prediction (from ml_exploit_predictor.py)
+    3. Rule-based: ports 80/443→0.85, port 22→0.60, DB ports→0.85, else→0.30
+
+  Hop Probability:
+    1. Grounded CVE probability
+    2. ML blend: 40% ML prediction + 60% lateral movement probability
+    3. Rule-based: credential_reuse(0.9) × skill × priv_esc_penalty(0.7)
+
+  Path probability = product of all step probabilities.
+  Overall breach probability = max across all paths.
+
+3.2.6 monte_carlo.py — Monte Carlo Simulation
+  Purpose: Randomized breach simulation for statistical confidence.
+  Implementation:
+    - Runs configurable iterations (default 1000, cap 5000)
+    - For each iteration, tests paths in descending probability order
+    - Breach succeeds if random() < path_probability
+    - Successful breaches get randomized time estimates
+    - Returns breach_success_rate (%) and average_time_if_successful
+
+3.2.7 centrality.py — Choke Point Analysis
+  Purpose: Identifies critical infrastructure nodes using graph centrality.
+  Implementation:
+    - Computes betweenness, closeness, and degree centrality on undirected graph
+    - Calculates path dependency percentage per node
+    - Simulates node hardening (removal) to measure risk reduction
+    - Detects single points of catastrophic failure (≥90% path dependency)
+    - Returns top 5 nodes sorted by betweenness centrality
+
+3.2.8 analysis_extensions.py — Stage 4.5 Extensions
+  Purpose: Advanced analysis tools.
+
+  Functions:
+    simulate_node_hardening(): Clones architecture, removes target node,
+      re-runs full simulation, returns delta metrics (risk reduction %,
+      path reduction %, probability change).
+
+    generate_attack_timeline(): Converts breach_time breakdown into stepwise
+      timeline with cumulative timestamps and success probabilities.
+
+    cluster_attack_paths(): Groups paths by shared entry points, returns
+      cluster sizes and representative paths.
+
+    perform_sensitivity_analysis(): Runs simulations at 3 attacker skill
+      levels (0.6=Low, 1.0=Medium, 1.4=Elite), returns risk variance.
+
+3.3 STANDALONE BACKEND MODULES
+-------------------------------
+
+3.3.1 rl_attacker.py — Reinforcement Learning Attacker
+  Purpose: Q-Learning agent that discovers alternative attack paths.
+  Implementation:
+    - RLAttacker class with Q-table (state-action value table)
+    - Hyperparameters: alpha=0.2, gamma=0.8, epsilon=0.2
+    - Training: 1000 episodes, max 15 steps per episode
+    - Epsilon-greedy exploration with greedy exploitation
+    - Reward function based on: vulnerability score, privilege escalation,
+      lateral movement bonus, target node bonus, high-value asset bonus
+    - Q-Learning update: Q(s,a) = Q(s,a) + α[R + γ·max(Q(s',a')) - Q(s,a)]
+    - Path extraction avoids cycles via visited set
+    - Comparison with deterministic path generated automatically
+
+3.3.2 historical_validation.py — Historical Breach Validation
+  Purpose: Validates simulated paths against known real-world breaches.
+  Implementation:
+    - In-memory dataset of 4 breach patterns:
+      Log4Shell, SolarWinds, ProxyShell, PrintNightmare
+    - Jaccard-like similarity scoring between simulated and historical chains
+    - Position bonuses for entry/target node matches (+0.15 each)
+    - Returns score (0-1) and matched incident name
+    - Scores below 0.2 return None (no meaningful match)
+
+3.3.3 defender_prioritization.py — Defender Recommendations
+  Purpose: Ranks nodes by defense priority for remediation.
+  Implementation:
+    - Priority score = weighted combination of:
+        Path frequency (40%): fraction of attack paths using the node
+        Exposure (20%): node's exposure_score
+        Vulnerability (20%): 0.85 if CVEs present, 0.50 default
+        Proximity (20%): 1/(shortest_path_to_target + 1)
+    - Scaled by asset_value / 5.0
+    - Returns top N nodes with reasoned explanations
+
+3.3.4 vulnerability_intelligence.py — CVE Lookup Engine
+  Purpose: NVD 2.0 dataset parser for grounded CVE intelligence.
+  Implementation:
+    - Loads NVD JSON or JSON.GZ files (supports lazy loading)
+    - Parses CVSS v3.1/v3.0 metrics
+    - Extracts: base_score, exploitability_score, attack_vector,
+      attack_complexity, privileges_required, user_interaction, scope
+    - Computes normalized_exploitability = exploitability_score / 10.0
+    - Provides get_cve_intelligence(cve_id) lookup
+
+3.3.5 mitre_mapper.py — MITRE ATT&CK Technique Mapping
+  Purpose: Maps CVE characteristics to MITRE ATT&CK techniques.
+  Implementation:
+    - Hardcoded technique dictionary covering 4 techniques:
+        T1190: Exploit Public-Facing Application (Initial Access)
+        T1068: Exploitation for Privilege Escalation
+        T1021: Remote Services (Lateral Movement)
+        T1041: Exfiltration Over C2 Channel
+    - Rule-based mapping:
+        NETWORK attack vector → T1190
+        LOW/NONE privileges + priv_esc → T1068
+        Lateral movement → T1021
+        High-value access → T1041
+
+3.3.6 stress_test.py
+  Purpose: Performance stress testing module (not integrated into main
+  simulation pipeline; used for development validation).
+
+
+================================================================================
+4. ATTACK SIMULATION PIPELINE
+================================================================================
+
+4.1 COMPLETE EXECUTION FLOW
+-----------------------------
+
+The simulation pipeline executes in main.py's run_simulation_logic() function,
+which orchestrates 8 major phases:
+
+Phase 1 — Validation & Parsing:
+  Input:  Raw JSON from stdin
+  Process:
+    a) validate_input() checks against input_schema.json
+    b) parse_input() validates structure and normalizes defaults
+  Output: Clean architecture dict
+  Error:  Returns structured error response if invalid
+
+Phase 2 — Graph Construction:
+  Input:  Normalized architecture dict
+  Process:
+    a) build_graph() creates nx.DiGraph
+    b) Computes per-node exposure_score, privilege_weight, vulnerability_score
+    c) Computes per-edge weight and friction
+  Output: Populated NetworkX DiGraph
+
+Phase 3 — Path Finding & Primary Simulation:
+  Input:  Graph G, architecture dict
+  Process:
+    a) simulate_attack() runs full attack simulation
+    b) Selects best entry point (max exposure)
+    c) Finds all simple paths (cutoff=12, max=500, timeout=10s)
+    d) Ranks by path_risk formula
+    e) Computes 3 optimized paths (Dijkstra)
+    f) Builds vulnerability chain for primary path
+  Output: Primary path, secondary path, attack steps, vulnerability chain,
+          optimized paths
+
+  Resilient System Handling:
+    If no viable path is found, returns a complete "resilient" response
+    with zero risk scores and defensive posture messaging.
+
+Phase 4 — Detailed Analysis:
+  Input:  Graph, simulation results, architecture
+  Process (run in sequence):
+    a) calculate_risk()         → risk_score, severity, component_scores
+    b) estimate_breach_time()   → total_minutes, breakdown, display
+    c) calculate_confidence()   → confidence_score, label, factors
+    d) compute_business_impact()→ data/operational/compliance risk
+    e) compute_path_probability()→ per-path success probability
+    f) nx.all_simple_paths()    → enumerate all paths for centrality
+    g) analyze_choke_points()   → top 5 critical nodes
+    h) run_monte_carlo()        → breach success rate (1000 iterations)
+    i) calculate_advanced_risk()→ combined risk metric
+
+Phase 5 — Stage 4.5 Extensions:
+  Input:  Analysis results, architecture
+  Process:
+    a) generate_attack_timeline() → stepwise timeline
+    b) cluster_attack_paths()     → grouped path clusters
+    c) simulate_node_hardening()  → delta metrics (if harden_node specified)
+    d) perform_sensitivity_analysis() → risk across skill levels
+
+  Recursion Guard: Extensions use _skip_extensions=True when calling
+  run_simulation_logic recursively to prevent infinite recursion.
+
+Phase 6 — AI Explanation:
+  Input:  All analysis outputs
+  Process:
+    a) explain_attack() calls OpenAI GPT-4o with structured prompt
+    b) System prompt defines 5-section JSON output format
+    c) User prompt includes attack path, metrics, architecture context
+    d) Falls back to rule-based explanation if no API key
+  Output: 5 structured sections (executive_summary, technical_analysis,
+          risk_justification, business_interpretation, mitigation_roadmap)
+
+Phase 7 — Stage 4 Analytics:
+  Input:  Graph, paths
+  Process:
+    a) HistoricalValidator().validate_path() → similarity score
+    b) DefenderPrioritization().get_recommendations() → top 5 targets
+
+Phase 7.5 — RL Attacker:
+  Input:  Graph, entry point, target
+  Process:
+    a) train_rl_agent() → 1000-episode Q-Learning training
+    b) simulate_rl_path() → extract best learned path
+    c) compare_rl_vs_deterministic() → textual comparison
+  Output: RL attack path, expected reward, comparison text
+
+Phase 8 — Output Assembly:
+  Assembles 60+ fields into final JSON response including:
+    Status metadata, RL results, Stage 4 analytics, all paths,
+    risk scores, probability data, Monte Carlo results, choke points,
+    sensitivity analysis, confidence metrics, breach time data,
+    business impact, AI analysis, serialized graph, and architecture.
+
+
+================================================================================
+5. FRONTEND ARCHITECTURE
+================================================================================
+
+5.1 TECHNOLOGY OVERVIEW
+------------------------
+  Framework:    Next.js 15.5 with Turbopack
+  UI Library:   React 19.2 with TypeScript
+  Graph Engine: @xyflow/react (React Flow) v12
+  State:        Zustand 5.x
+  Styling:      Tailwind CSS 4
+  Icons:        Lucide React
+  Design:       Monochrome (white bg, black text, grey borders)
+
+5.2 PROJECT STRUCTURE
+----------------------
+  frontend/src/
+  ├── app/
+  │   ├── page.tsx              — Main page (Home component)
+  │   ├── layout.tsx            — Root layout
+  │   ├── globals.css           — Global styles
+  │   └── api/simulate/route.ts — Backend API bridge
+  ├── components/
+  │   ├── Canvas/
+  │   │   ├── SimulationWorkspace.tsx — ReactFlow canvas wrapper
+  │   │   ├── GraphCanvas.tsx        — Re-export of SimulationWorkspace
+  │   │   ├── EdgeRenderer.tsx       — Custom edge with flow animation
+  │   │   └── ConnectionPreview.tsx  — Dashed preview during edge drag
+  │   ├── Nodes/
+  │   │   └── InfrastructureNode.tsx — Custom graph node component
+  │   ├── Panels/
+  │   │   ├── NodeConfigPanel.tsx     — Node property inspector
+  │   │   ├── SimulationResultPanel.tsx — Results with 4 tabs
+  │   │   └── AttackTimeline.tsx      — Step-by-step timeline
+  │   ├── Navigation/
+  │   │   └── LeftNav.tsx            — Draggable node palette
+  │   └── Toolbar/
+  │       └── TopToolbar.tsx         — Run/Reset/Example/Clear buttons
+  ├── modules/
+  │   ├── nodeState/index.ts         — Primary Zustand store (485 lines)
+  │   ├── workspaceState/index.ts    — Workspace tabs/sidebar state
+  │   ├── graphEngine/index.ts       — Graph serialization engine
+  │   ├── attackVisualization/       — (empty, reserved)
+  │   └── defender/
+  │       ├── DefenderAnalysisEngine.ts
+  │       ├── chokePointAnalysis.ts
+  │       ├── mitigationSimulator.ts
+  │       ├── pathAnalysis.ts
+  │       └── recommendationEngine.ts
+  ├── layout/
+  │   ├── PremiumLayout.tsx          — LeftNav + main content
+  │   ├── NavLayout.tsx              — Navigation layout
+  │   └── WorkspaceLayout.tsx        — Workspace layout
+  ├── hooks/
+  │   └── useNodeConfiguration.ts
+  └── lib/
+      ├── types.ts                   — 230-line TypeScript interfaces
+      └── utils.ts                   — Tailwind class merger
+
+5.3 COMPONENT DESCRIPTIONS
+----------------------------
+
+5.3.1 SimulationWorkspace.tsx (261 lines)
+  The central canvas component. Wraps React Flow with:
+    - Custom node type: "infrastructure" → InfrastructureNode
+    - Custom edge type: "network" → NetworkEdge
+    - Drag-and-drop support for node creation from LeftNav
+    - Snap-to-grid (24px intervals)
+    - MiniMap with compromise-aware coloring
+    - Zoom controls (0.1x to 2x)
+    - Keyboard delete support (Backspace/Delete)
+    - Stats HUD panel (top-right) showing node/edge/compromised counts
+    - Empty state hint when no nodes present
+    - Error toast for simulation failures
+    - Dot background pattern
+
+5.3.2 InfrastructureNode.tsx (132 lines)
+  Custom React Flow node representing an infrastructure component.
+  Features:
+    - 7 icon types (Server, Cpu, Database, Shield, Cloud, Monitor, HardDrive)
+    - Visual states: normal, selected (black border + shadow), compromised
+      (red border + red bg)
+    - Displays: type label, name, IP address, port count
+    - Status dot: green (online), red (compromised), grey (offline)
+    - Connection handles: top (target) and bottom (source)
+    - Hover effects: border darken, slight elevation, shadow
+
+5.3.3 EdgeRenderer.tsx (53 lines)
+  Custom React Flow edge using SmoothStep algorithm (12px border radius).
+  Features:
+    - Normal state: thin grey line with slow-moving dot
+    - Animated state (attack path): thick red line with fast-moving dot
+    - SVG animateMotion for continuous flow visualization
+
+5.3.4 ConnectionPreview.tsx (56 lines)
+  Shown while the user is dragging to create a new edge.
+  Features:
+    - Dashed grey SmoothStep path
+    - Pulsing circle at cursor position (animates radius 3→6→3)
+    - Solid inner dot for precise targeting
+
+5.3.5 LeftNav.tsx (95 lines)
+  Left sidebar containing the node palette.
+  Features:
+    - App logo and version header
+    - 7 draggable node types with default configurations:
+        Web Server:    ports [80,443], Low privilege, value 3
+        App Server:    ports [8080], Medium privilege, value 5
+        Database:      ports [3306], High privilege, value 8
+        Firewall:      ports [443], High privilege, value 2
+        Storage:       ports [22], High privilege, value 9
+        Cloud Instance: ports [22,443], Medium privilege, value 6
+        Workstation:   ports [3389], Low privilege, value 3
+    - HTML5 drag-and-drop with data transfer via application/reactflow-* keys
+
+5.3.6 TopToolbar.tsx (92 lines)
+  Horizontal toolbar at the top of the workspace.
+  Buttons:
+    - Run Simulation: Triggers backend API call (shows spinner while running)
+    - Reset: Clears simulation results, reverts node visual states
+    - Generate Example: Loads 5-node example infrastructure
+    - Clear Canvas: Removes all nodes and edges
+    - Search: Input field for node search (UI only, not wired)
+    - Export: Download button (UI only, not wired)
+
+5.3.7 NodeConfigPanel.tsx (209 lines)
+  Right-panel inspector shown when a node is selected.
+  Sections:
+    - General: Name input, public exposure toggle
+    - Network: Comma-separated port list
+    - Security: Privilege level dropdown (Low/Medium/High),
+      Data criticality dropdown, CVE vulnerability list with add/remove
+    - Asset Value: 1-10 range slider
+
+5.3.8 SimulationResultPanel.tsx (249 lines)
+  Right-panel showing simulation results in 4 tabs:
+
+  Tab 1 — Metrics:
+    Risk Score (with severity badge), Attack Paths count,
+    Breach Time, Confidence %, Exploit Probability %, Monte Carlo rate
+
+  Tab 2 — Paths:
+    Primary attack vector with node badges and arrows,
+    Secondary paths (up to 2 shown)
+
+  Tab 3 — Defender:
+    Defense recommendations with description, risk reduction %,
+    "Simulate Fix" button for mitigation preview, revert capability
+
+  Tab 4 — AI:
+    Executive Summary, Technical Analysis, Risk Justification,
+    Mitigation Roadmap (from backend AI/fallback)
+
+  Also displays Mitigation Active banner with revert button.
+
+5.3.9 AttackTimeline.tsx (75 lines)
+  Visual timeline showing attack progression step-by-step.
+  Features:
+    - Vertical timeline with connecting line and dots
+    - Icons per step type (Zap, ArrowRight, ShieldAlert, Target)
+    - Timestamp per step from breach_time breakdown
+    - Spinner animation while simulation is running
+
+5.3.10 PremiumLayout.tsx (25 lines)
+  Root layout wrapper combining LeftNav sidebar with main content area.
+  Full-height flexbox layout with overflow hidden.
+
+
+================================================================================
+6. STATE MANAGEMENT
+================================================================================
+
+6.1 OVERVIEW
+-------------
+The application uses Zustand for state management with two primary stores:
+  1. useNodeStateStore — Primary store (485 lines, most complex)
+  2. useWorkspaceStore — Workspace UI state (62 lines, persisted)
+
+6.2 NODE STATE STORE (modules/nodeState/index.ts)
+---------------------------------------------------
+
+6.2.1 State Shape:
+  {
+    nodes: InfrastructureNode[]       — React Flow node array
+    edges: Edge[]                     — React Flow edge array
+    selectedNodeId: string | null     — Currently selected node
+
+    // Backup for mitigation revert
+    originalNodes: InfrastructureNode[] | null
+    originalEdges: Edge[] | null
+    originalRiskScore: number | null
+
+    // Simulation lifecycle
+    isSimulating: boolean
+    simulationResults: SimulationResults | null   — Computed metrics
+    backendResult: SimulationResult | null         — Raw backend response
+    attackPath: string[]                           — Animated path node IDs
+    timeline: TimelineStep[]                       — Attack timeline steps
+    simulationError: string | null
+
+    // Defender
+    isMitigationActive: boolean
+    recommendations: Recommendation[]
+  }
+
+6.2.2 Key Actions:
+
+  runSimulation():
+    1. Clears previous results and resets visual states
+    2. Serializes graph via exportGraphToSimulationJSON()
+    3. Builds name→ID map for reverse lookup
+    4. Calls POST /api/simulate with architecture + attacker_skill
+    5. On success: maps backend server names to node IDs
+    6. Builds timeline from attack_steps
+    7. Animates path node-by-node (600ms delay per node):
+       - Marks nodes as highlighted + compromised
+       - Sets edges to animated + red styling with glow effect
+    8. After last node: sets final simulationResults and recommendations
+    9. On error: sets simulationError message
+
+  resetSimulation():
+    Clears all simulation state, reverts node/edge visuals, clears
+    recommendations and mitigation state.
+
+  generateExample():
+    Loads the 5-node example infrastructure (web→app→db→storage→backup)
+    and resets any active simulation.
+
+  resetCanvas():
+    Removes all nodes and edges entirely.
+
+  applyMitigation(recommendation):
+    Backs up current state, applies mitigation via simulateMitigation(),
+    updates nodes/edges and recalculated risk score.
+
+  revertMitigation():
+    Restores backed-up state from before mitigation.
+
+6.2.3 Initial State:
+  Pre-loaded with 5 example nodes:
+    node-1: web (WebServer, IP 10.0.0.5, ports 80/443/22, public, value 3)
+    node-2: app (AppServer, IP 10.0.2.10, ports 8080/22, value 5)
+    node-3: db (Database, IP 10.0.5.100, port 3306, value 8)
+    node-4: storage (Storage, IP 10.0.6.50, port 22, value 9)
+    node-5: backup (Storage, IP 10.0.7.100, no ports, value 10)
+
+  And 5 edges: web→app, app→db, db→storage, storage→backup, app→storage
+
+6.3 WORKSPACE STATE STORE (modules/workspaceState/index.ts)
+-------------------------------------------------------------
+  Persisted to localStorage (key: 'attack-simulator-workspace-v1').
+  State:
+    tabs: WorkspaceTab[] — tab ID, title, active flag, type
+    activeTabId: string
+    isSidebarCollapsed: boolean
+
+  Actions: addTab, removeTab, setActiveTab, toggleSidebar
+
+  Note: This store is defined but the tab UI is not fully wired in the
+  current implementation. The workspace always shows the main simulator.
+
+6.4 GRAPH SERIALIZATION ENGINE (modules/graphEngine/index.ts)
+--------------------------------------------------------------
+  Bridges the frontend visual graph to the backend JSON schema.
+
+  exportGraphToSimulationJSON(nodes, edges):
+    - Maps node labels to sanitized server names (lowercase, underscored)
+    - Handles duplicate name collisions with numeric suffixes
+    - Converts port strings to integers (validated 1-65535)
+    - Maps privilege levels: High→high, Medium→medium, default→low
+    - Computes asset values from criticality + privilege + custom override
+    - Builds connections array from edge source→target
+
+  buildNameToIdMap(nodes):
+    Reverse map from server name → React Flow node ID. Uses identical
+    naming logic as exportGraphToSimulationJSON for consistency.
+
+
+================================================================================
+7. DATA MODEL
+================================================================================
+
+7.1 SIMULATION INPUT SCHEMA (backend/input_schema.json)
+---------------------------------------------------------
+
+The backend expects a JSON payload via stdin with this structure:
+
+  {
+    "architecture": {
+      "servers":      ["web", "app", "db"],
+      "connections":  [["web", "app"], ["app", "db"]],
+      "open_ports":   {"web": [80, 443, 22]},
+      "permissions":  {"web": "low", "db": "high"},
+      "asset_value":  {"web": 3, "db": 8},
+      "public_facing": ["web"]
+    },
+    "openai_key":     "sk-...",
+    "monte_carlo":    true,
+    "attacker_skill": 1.0,
+    "harden_node":    "app"
+  }
+
+7.2 FIELD DESCRIPTIONS
+-----------------------
+
+  servers:
+    List of unique server/node identifiers. Each must be referenced consistently
+    across all other fields. Minimum 1 server required.
+
+  connections:
+    Directed edges in the graph. Each is a 2-element array [source, target].
+    Both source and target must exist in the servers array.
+
+  open_ports:
+    Maps each server to its list of open TCP ports. Port numbers are integers.
+    Specific ports influence behavior:
+      22:      SSH — increases exposure (+0.20), enables brute-force vulns
+      80/443:  HTTP/HTTPS — increases exposure (+0.15), enables web exploits
+      3306:    MySQL, 5432: PostgreSQL, 27017: MongoDB — high exposure (+0.25)
+      3389:    RDP — workstation access
+
+  permissions:
+    Privilege level per server. Values: "low", "medium", "high". Affects
+    privilege_weight, breach time modifier, and privilege escalation detection.
+
+  asset_value:
+    Numeric value 0-10. Affects edge weight, risk scoring, business impact
+    thresholds, and target selection (highest value = exfiltration target).
+
+  public_facing:
+    Servers directly accessible from the internet. These become candidate
+    entry points for attack simulation.
+
+7.3 SIMULATION OUTPUT SCHEMA
+------------------------------
+
+The backend returns a JSON object with 60+ fields organized into groups:
+
+  Status:         status, request_id, execution_time, version
+  Paths:          paths[][], primary_path[], secondary_paths[][], attack_path[],
+                  attack_steps[], vulnerability_chain[], entry_point, target,
+                  attack_timeline[], path_clusters[], optimized_paths{}
+  Risk:           risk_score, structural_risk, advanced_risk, severity,
+                  severity_color, component_scores{}, risk_components{}
+  Probability:    exploit_probability, vulnerability_intelligence[],
+                  breach_probability_overall, monte_carlo_results{},
+                  choke_points[], centrality_scores{}, harden_metrics{},
+                  sensitivity_analysis{}, resilience_summary{}
+  Confidence:     confidence_score, confidence_label, confidence_color,
+                  confidence_factors{}
+  Breach Time:    breach_time, breach_time_data{display, total_minutes, breakdown[]}
+  Business Impact: business_impact{data_risk, operational_risk, compliance_risk,
+                  summary_tags[]}
+  AI Analysis:    ai_analysis{}, ai{executive_summary, technical_analysis,
+                  risk_justification, business_interpretation, mitigation_roadmap}
+  RL Attacker:    rl_attacker{}, rl_attack_path[], rl_expected_reward, rl_comparison
+  Stage 4:        validation_score, matched_incident, defender_recommendations[]
+  Infrastructure: graph{nodes[], edges[]}, arch{}
+
+
+================================================================================
+8. AI COMPONENTS
+================================================================================
+
+8.1 LLM EXPLANATION SYSTEM (ai_explainer.py)
+----------------------------------------------
+
+  Model: OpenAI GPT-4o | Temperature: 0.3 | Max Tokens: 1600
+
+  System Prompt instructs the model to act as a senior cybersecurity red-team
+  analyst and output a JSON object with 5 required sections.
+
+  User Prompt includes attack paths, vulnerability chain, simulation metrics
+  (risk score, confidence, breach time), full architecture context (servers,
+  ports, permissions, asset values), and business impact summaries.
+
+  Output Sections:
+    1. executive_summary       — 2-3 sentences for C-suite
+    2. technical_analysis      — Step-by-step technical explanation
+    3. risk_justification      — Why the scores are what they are
+    4. business_interpretation — Financial/regulatory consequences
+    5. mitigation_roadmap      — Numbered, prioritized remediation steps
+
+  Fallback System:
+    When OpenAI is unavailable (no API key, import error, API failure),
+    a deterministic rule-based fallback generates all 5 sections using
+    template strings populated with simulation data. Includes a sophisticated
+    _rule_based_mitigation() function generating prioritized tips based on
+    the vulnerability chain.
+
+8.2 ML EXPLOIT PREDICTOR (ml_exploit_predictor.py)
+----------------------------------------------------
+
+  Model: Pre-trained scikit-learn classifier (exploit_prediction_model.pkl)
+  Loading: Once at import time via joblib.load()
+  Caching: Feature vector → prediction results cached in a dict
+
+  9-Feature Vector:
+    1. attack_vector:        PHYSICAL(0), LOCAL(1), ADJACENT(2), NETWORK(3)
+    2. attack_complexity:    HIGH(0), LOW(1)
+    3. privileges_required:  NONE(0), LOW(1), HIGH(2)
+    4. user_interaction:     NONE(0), REQUIRED(1)
+    5. scope:                UNCHANGED(0), CHANGED(1)
+    6. network_exposure:     Boolean (attack_vector == NETWORK)
+    7. easy_exploit:         Boolean (LOW complexity + NONE privs + NONE interaction)
+    8. privilege_escalation: Boolean (scope == CHANGED)
+    9. high_severity:        Boolean (vulnerability_score >= 0.7)
+
+  Feature Extraction maps graph node attributes (ports, exposure_score,
+  permission, public_facing, privilege_weight) to the 9-feature vector.
+
+  Prediction: Uses predict_proba() for P(exploit_success).
+  Returns None on any failure (caller uses rule-based fallback).
+
+8.3 RL ATTACKER (rl_attacker.py)
+---------------------------------
+
+  Algorithm: Tabular Q-Learning
+  Environment: NetworkX DiGraph (nodes = states, edges = actions)
+  Hyperparameters: α=0.2, γ=0.8, ε=0.2, epochs=1000, max_steps=15
+
+  Reward Function:
+    base = 1.0 + vulnerability_score × 0.1
+    + 0.10 for privilege escalation
+    + 0.05 for lateral movement
+    + 0.20 for reaching target
+    + 0.10 for high-value intermediate (value >= 8)
+
+  Q-update: Q(s,a) += α[R + γ·max(Q(s',a')) - Q(s,a)]
+
+  Path Extraction: Greedy walk through Q-table avoiding visited nodes.
+  Output: best path, cumulative reward, comparison with deterministic path.
+
+8.4 VULNERABILITY INTELLIGENCE (vulnerability_intelligence.py)
+----------------------------------------------------------------
+
+  Data Source: NVD 2.0 JSON/GZIP dataset | Loading: Lazy
+  Cache: In-memory dict {CVE_ID → structured intelligence}
+  Extracts: base_score, exploitability_score, attack_vector,
+  attack_complexity, privileges_required, user_interaction, scope,
+  normalized_exploitability. Supports CVSS v3.1 and v3.0.
+
+8.5 MITRE ATT&CK MAPPING (mitre_mapper.py)
+---------------------------------------------
+
+  4 Techniques: T1190 (Initial Access), T1068 (Privilege Escalation),
+  T1021 (Lateral Movement), T1041 (Exfiltration)
+
+  Mapping Rules:
+    NETWORK attack vector → T1190
+    LOW/NONE privileges + priv_esc → T1068
+    Lateral movement context → T1021
+    High-value asset access → T1041
+
+
+================================================================================
+9. VISUALIZATION SYSTEM
+================================================================================
+
+9.1 ATTACK PATH VISUALIZATION
+-------------------------------
+
+  Animation Sequence (600ms per node):
+    1. Node: sets highlighted=true, compromised=true (red border + bg)
+    2. Edge: animated=true, stroke=#ef4444, strokeWidth=3, drop-shadow glow
+    3. Edge dot: red, 2.5px radius, 1.5s travel animation
+
+9.2 NODE VISUAL STATES
+------------------------
+
+  Normal:   White bg, grey border (#E5E5E5), green status dot
+  Hover:    Darker border (#888), shadow, -1px elevation
+  Selected: Black border (#111), medium shadow
+  Compromised: Red border (#DC2626), red-50 bg, red icon, red dot
+
+9.3 TIMELINE VISUALIZATION
+----------------------------
+
+  Vertical connected timeline with type-specific icons.
+  Per step: icon, timestamp, type label, node name, exploit details.
+  Target Compromise step uses red styling. Spinner during simulation.
+
+9.4 MINIMAP
+-------------
+  Bottom-right overview. Grey (normal) and red (compromised) coloring.
+  Supports zoom and pan.
+
+
+================================================================================
+10. CURRENT LIMITATIONS
+================================================================================
+
+10.1 FRONTEND LIMITATIONS
+---------------------------
+
+  1. Search Not Wired: Search input renders but does not filter/highlight nodes.
+  2. Export Not Implemented: Download button has no onClick handler.
+  3. Workspace Tabs Not Functional: Tab store exists but tab UI is not rendered.
+  4. Dashboard/Reports Routes Empty: Directories exist but pages are not built.
+  5. attackVisualization Module Empty: Reserved but contains no code.
+  6. Node IP Address Not Editable: No IP input in NodeConfigPanel.
+  7. No Persistence: Graph state lost on page refresh. Only workspace state
+     is persisted to localStorage.
+
+10.2 BACKEND LIMITATIONS
+--------------------------
+
+  1. NVD Dataset Minimal: nvd.json.gz is only 286 bytes — effectively empty.
+     The grounded CVE probability path never activates in practice.
+  2. No Real-Time CVE Updates: Static dataset, no NVD API integration.
+  3. Historical Validation Limited: Only 4 breach patterns. Name-based matching
+     rarely matches user-defined node names.
+  4. MITRE Mapping Minimal: Only 4 of 200+ ATT&CK techniques mapped.
+  5. OpenAI Dependency: AI explanations require API key and internet access.
+  6. RL Training Per Request: 1000 episodes trained from scratch each request.
+  7. No Multi-Entry-Point Attack: Always selects single best entry point.
+  8. Single-Threaded: No parallelism for Monte Carlo or sensitivity analysis.
+
+10.3 INTEGRATION LIMITATIONS
+------------------------------
+
+  1. No Authentication: API endpoint has no auth or rate limiting.
+  2. No WebSocket Support: No streaming of simulation progress.
+  3. No Database: No persistent storage for simulation history.
+  4. Backend Not a Server: Python runs as child process per request.
+
+
+================================================================================
+11. IMPROVEMENT OPPORTUNITIES
+================================================================================
+
+11.1 AI/ML IMPROVEMENTS
+-------------------------
+
+  1. Fine-Tuned Security Model: Train domain-specific LLM on cybersecurity
+     reports for more accurate explanations.
+  2. RAG-Based CVE Intelligence: Vector database of CVE descriptions for
+     retrieval-augmented generation.
+  3. Continuous RL Training: Cache trained agents per graph topology.
+  4. Multi-Agent Simulation: Multiple attacker personas with different
+     skill levels and objectives.
+  5. Full NVD Integration: Complete NVD 2.0 dataset with automatic updates.
+  6. Expanded MITRE Mapping: All relevant ATT&CK techniques (200+).
+
+11.2 FRONTEND IMPROVEMENTS
+----------------------------
+
+  1. Graph Persistence: Save/load graphs to localStorage or database.
+  2. Implement Search: Filter and highlight matching nodes on canvas.
+  3. Graph Export: JSON, PNG/SVG, and PDF report generation.
+  4. Comparison View: Side-by-side pre/post mitigation visualization.
+  5. Real-Time Collaboration: Multi-user editing via WebSocket.
+  6. Node Templates: Pre-built infrastructure templates (AWS, Azure, K8s).
+  7. Dashboard: Charts for risk trends, top vulnerabilities, compliance.
+
+11.3 PERFORMANCE IMPROVEMENTS
+-------------------------------
+
+  1. Persistent Python Backend: FastAPI server instead of child process.
+  2. Parallel Analysis: asyncio/multiprocessing for independent modules.
+  3. WebSocket Streaming: Real-time simulation progress updates.
+  4. Result Caching: Cache by architecture hash for repeated simulations.
+  5. Worker Queue: Celery/Redis for asynchronous job processing.
+
+11.4 SIMULATION REALISM IMPROVEMENTS
+---------------------------------------
+
+  1. Temporal Modeling: Time-of-day effects and multi-day campaigns.
+  2. Active Defense Modeling: IDS/IPS, SIEM alerts, honeypots.
+  3. Probabilistic Hardening: Partial patching with graduated risk reduction.
+  4. Supply Chain Modeling: Third-party dependency attack vectors.
+  5. Insider Threat Modeling: Attacks from internal nodes with credentials.
+
+
+================================================================================
+END OF DOCUMENT
+================================================================================
+
+Total modules analyzed:
+  Backend core:       5 (parser, graph_engine, attack_engine, validator, config_loader)
+  Backend analysis:  11 (scoring, breach_time, confidence, business_impact,
+                        probability, monte_carlo, centrality, ai_explainer,
+                        ml_exploit_predictor, analysis_extensions, __init__)
+  Backend standalone:  5 (rl_attacker, historical_validation,
+                        defender_prioritization, vulnerability_intelligence,
+                        mitre_mapper)
+  Frontend components: 10+ across Canvas, Nodes, Panels, Navigation, Toolbar
+  Frontend modules:    9 files across nodeState, workspaceState, graphEngine,
+                       attackVisualization, defender
+  Configuration:       config.yaml, input_schema.json, sample_input.json
+  Types:               lib/types.ts (230 lines, 20+ interfaces)

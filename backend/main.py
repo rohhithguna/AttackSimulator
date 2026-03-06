@@ -35,7 +35,6 @@ from analysis.analysis_extensions import (
     cluster_attack_paths, 
     JSON_deep_copy,
     simulate_node_hardening,
-    perform_sensitivity_analysis
 )
 
 # Stage 4 Integrations
@@ -49,7 +48,6 @@ VERSION = "1.0.0-production"
 
 def run_simulation_logic(
     raw_input: dict, 
-    openai_key: str = "", 
     monte_carlo_enabled: bool = True, 
     attacker_skill: float = 1.0, 
     harden_node: str = None,
@@ -60,9 +58,6 @@ def run_simulation_logic(
     """
     start_time_perf = time.perf_counter()
     request_id = str(uuid.uuid4())
-
-    if openai_key:
-        os.environ["OPENAI_API_KEY"] = openai_key
 
     # 1. Validation & Parsing
     try:
@@ -109,13 +104,8 @@ def run_simulation_logic(
     primary_path = sim_result["attack_path"]
     exploit_prob = compute_path_probability(G, primary_path, attacker_skill)
     
-    # Find all paths for advanced analysis
-    config = get_config()
-    max_depth = config.get("simulation", {}).get("max_dfs_depth", 12)
-    try:
-        all_paths = list(nx.all_simple_paths(G, source=sim_result["entry_point"], target=sim_result["target"], cutoff=max_depth))
-    except:
-        all_paths = [primary_path]
+    # Reuse all_paths from attack_engine (avoids duplicate nx.all_simple_paths call)
+    all_paths = sim_result.get("all_paths", [primary_path])
 
     # Choke Points & Centrality
     choke_points_data = analyze_choke_points(G, all_paths)
@@ -174,7 +164,8 @@ def run_simulation_logic(
             attacker_skill=attacker_skill
         )
 
-    # Sensitivity Analysis (skip during recursive calls to prevent infinite recursion)
+    # Sensitivity Analysis — lightweight scoring-only pass
+    # Reuses existing graph and paths instead of re-running full simulation
     if _skip_extensions:
         sensitivity_results = {
             "analysis_type": "attacker_skill_sensitivity",
@@ -182,9 +173,8 @@ def run_simulation_logic(
             "risk_variance": 0
         }
     else:
-        sensitivity_results = perform_sensitivity_analysis(
-            arch, 
-            lambda *a, **kw: run_simulation_logic(*a, **kw, _skip_extensions=True)
+        sensitivity_results = _fast_sensitivity_analysis(
+            G, sim_result, all_paths, arch, attacker_skill
         )
 
     # 6. AI Explanation
@@ -214,7 +204,7 @@ def run_simulation_logic(
     
     try:
         # Use existing entry point and target for RL training
-        rl_agent = train_rl_agent(G, [sim_result["entry_point"]], sim_result["target"], episodes=1000)
+        rl_agent = train_rl_agent(G, [sim_result["entry_point"]], sim_result["target"], episodes=300)
         rl_res = simulate_rl_path(rl_agent, sim_result["entry_point"], sim_result["target"])
         rl_attacker_data = {
             "rl_attack_path": rl_res["path"],
@@ -307,6 +297,48 @@ def run_simulation_logic(
         # Infrastructure
         "graph": _serialize_graph(G),
         "arch": arch
+    }
+
+
+def _fast_sensitivity_analysis(
+    G: nx.DiGraph,
+    sim_result: dict,
+    all_paths: list,
+    arch: dict,
+    current_skill: float
+) -> dict:
+    """
+    Lightweight sensitivity analysis — reuses the existing graph and paths.
+    Only recomputes scoring at different attacker skill levels instead of
+    re-running the entire simulation pipeline.
+    """
+    skills = [0.6, 1.0, 1.4]
+    skill_labels = ["Low", "Medium", "Elite"]
+    results = []
+    primary_path = sim_result["attack_path"]
+
+    for skill, label in zip(skills, skill_labels):
+        try:
+            prob = compute_path_probability(G, primary_path, skill)
+            # Risk score is structural (skill-independent), scale it by
+            # a simple multiplier derived from probability change
+            base_risk = calculate_risk(G, sim_result)["risk_score"]
+            prob_factor = prob / max(compute_path_probability(G, primary_path, 1.0), 0.01)
+            adjusted_risk = round(base_risk * max(0.5, min(prob_factor, 1.5)), 2)
+
+            results.append({
+                "skill_level": label,
+                "skill_value": skill,
+                "risk_score": adjusted_risk,
+                "breach_probability": round(prob, 4)
+            })
+        except Exception:
+            continue
+
+    return {
+        "analysis_type": "attacker_skill_sensitivity",
+        "scenarios": results,
+        "risk_variance": round(results[-1]["risk_score"] - results[0]["risk_score"], 2) if len(results) >= 2 else 0
     }
 
 def _build_resilient_response(request_id, version, arch, resilience, start_time):
@@ -423,7 +455,6 @@ if __name__ == "__main__":
         
         result = run_simulation_logic(
             raw_input      = payload,
-            openai_key     = payload.get("openai_key", ""),
             monte_carlo_enabled = payload.get("monte_carlo", True),
             attacker_skill = payload.get("attacker_skill", 1.0),
             harden_node    = payload.get("harden_node")
