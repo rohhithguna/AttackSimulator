@@ -14,71 +14,113 @@ export interface MitigationResult {
 }
 
 /**
- * Simulates applying a mitigation to the current graph.
+ * Simulates applying multiple mitigations to the current graph.
  */
 export const simulateMitigation = (
   nodes: InfrastructureNode[],
   edges: Edge[],
-  recommendation: Recommendation,
+  recommendations: Recommendation[],
   currentRiskScore: number
 ): MitigationResult => {
-  const newNodes = JSON.parse(JSON.stringify(nodes)) as InfrastructureNode[];
-  const newEdges = JSON.parse(JSON.stringify(edges)) as Edge[];
+  let updatedNodes = JSON.parse(JSON.stringify(nodes)) as InfrastructureNode[];
+  let updatedEdges = JSON.parse(JSON.stringify(edges)) as Edge[];
 
   const pathsBefore = getInfrastructureAttackPaths(nodes, edges);
 
-  switch (recommendation.type) {
-    case 'PATCH_VULNERABILITY': {
-      const { nodeId, vulnerability } = recommendation.actionPayload;
-      const node = newNodes.find(n => n.id === nodeId);
-      if (node) {
-        node.data.vulnerabilitiesList = node.data.vulnerabilitiesList.filter(v => v !== vulnerability);
-        node.data.vulnerabilities = node.data.vulnerabilitiesList.length;
-        // Mark as compromised false only if it was this node being patched
-        node.data.compromised = false;
-      }
-      break;
-    }
-    case 'NETWORK_SEGMENTATION': {
-      const { edgeId } = recommendation.actionPayload;
-      const edgeIndex = newEdges.findIndex(e => e.id === edgeId);
-      if (edgeIndex !== -1) {
-        newEdges.splice(edgeIndex, 1);
-      }
-      break;
-    }
-    case 'PRIVILEGE_RESTRICTION': {
-      const { nodeId, newLevel } = recommendation.actionPayload;
-      const node = newNodes.find(n => n.id === nodeId);
-      if (node) {
-        node.data.privilegeLevel = newLevel;
-      }
-      break;
-    }
-    case 'SERVICE_HARDENING': {
-       // logic for service hardening
-       break;
-    }
-  }
+  recommendations.forEach(recommendation => {
+    switch (recommendation.type) {
+      case 'PATCH_VULNERABILITY':
+      case 'SERVICE_HARDENING': {
+        const { nodeId, vulnerability } = recommendation.actionPayload;
+        const node = updatedNodes.find(n => n.id === nodeId);
+        if (node) {
+          if (vulnerability) {
+            node.data.vulnerabilitiesList = node.data.vulnerabilitiesList.filter(v => v !== vulnerability);
+            node.data.vulnerabilities = node.data.vulnerabilitiesList.length;
+          }
 
-  const pathsAfter = getInfrastructureAttackPaths(newNodes, newEdges);
+          // Structural changes to node ports
+          const desc = recommendation.description.toLowerCase();
+          if (desc.includes('database') || desc.includes('db')) {
+            node.data.ports = node.data.ports?.filter(p => !['3306', '5432', '27017'].includes(p)) || [];
+          } else if (desc.includes('ssh') || desc.includes('port 22')) {
+            node.data.ports = node.data.ports?.filter(p => p !== '22') || [];
+          } else if (desc.includes('web') || desc.includes('http')) {
+            node.data.ports = node.data.ports?.filter(p => !['80', '443'].includes(p)) || [];
+          } else if (desc.includes('restrict')) {
+            node.data.ports = [];
+          }
+
+          if (desc.includes('public') || desc.includes('web')) {
+            node.data.publicExposure = false;
+          }
+
+          node.data.compromised = false;
+
+          // ── ATTACK PATH COLLAPSE ──────────────────────────────────
+          // Remove ALL inbound edges to the patched node.
+          // This simulates firewall-blocking: attackers can no longer
+          // reach this node, so every attack path traversing it is
+          // structurally eliminated from the graph.
+          updatedEdges = updatedEdges.filter(
+            edge => edge.target !== nodeId
+          );
+        }
+        break;
+      }
+      case 'NETWORK_SEGMENTATION': {
+        const { edgeId } = recommendation.actionPayload;
+
+        // ── SEGMENTATION LOGIC ──────────────────────────────────────
+        // Primary: remove by edgeId
+        const edgeBefore = updatedEdges.length;
+        updatedEdges = updatedEdges.filter(e => e.id !== edgeId);
+
+        // Fallback: if edgeId didn't match, try source/target from
+        // affectedNodes ([source, target])
+        if (updatedEdges.length === edgeBefore && recommendation.affectedNodes?.length === 2) {
+          const [source, target] = recommendation.affectedNodes;
+          updatedEdges = updatedEdges.filter(
+            edge => !(edge.source === source && edge.target === target)
+          );
+        }
+        break;
+      }
+      case 'PRIVILEGE_RESTRICTION': {
+        const { nodeId, newLevel } = recommendation.actionPayload;
+        const node = updatedNodes.find(n => n.id === nodeId);
+        if (node) {
+          node.data.privilegeLevel = newLevel;
+        }
+        break;
+      }
+    }
+  });
+
+  const pathsAfter = getInfrastructureAttackPaths(updatedNodes, updatedEdges);
   const pathDelta = pathsAfter.length - pathsBefore.length;
 
-  // Calculate new risk score based on path reduction
-  const riskReductionFactor = pathsBefore.length > 0 
-    ? (pathsBefore.length - pathsAfter.length) / pathsBefore.length 
-    : recommendation.estimatedRiskReduction / 100;
-  
+  // Calculate new risk score based on path reduction and all mitigations combined
+  let totalEstimatedReduction = 0;
+  recommendations.forEach(r => totalEstimatedReduction += r.estimatedRiskReduction);
+  totalEstimatedReduction = Math.min(totalEstimatedReduction, 95);
+
+  const riskReductionFactor = pathsBefore.length > 0
+    ? (pathsBefore.length - pathsAfter.length) / pathsBefore.length
+    : totalEstimatedReduction / 100;
+
   const actualRiskReduction = Math.max(0.1, riskReductionFactor) * 100;
-  const newRiskScore = Math.max(0, currentRiskScore - (currentRiskScore * (actualRiskReduction / 100)));
+  const newRiskScore = recommendations.length > 0
+    ? Math.max(0, currentRiskScore - (currentRiskScore * (actualRiskReduction / 100)))
+    : currentRiskScore;
 
   return {
     riskBefore: currentRiskScore,
     riskAfter: Math.round(newRiskScore),
     riskReduction: Math.round(actualRiskReduction),
     pathDelta,
-    newNodes,
-    newEdges
+    newNodes: updatedNodes,
+    newEdges: updatedEdges
   };
 };
 

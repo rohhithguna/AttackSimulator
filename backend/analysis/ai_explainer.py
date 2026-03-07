@@ -1,12 +1,13 @@
 """
-ai_explainer.py — Dual AI explanation system (Edge + Cloud).
+ai_explainer.py — AI explanation system with fallback chain.
 
-Supports two AI providers:
+Fallback order:
   1. Edge AI  — Local LM Studio (qwen3.5-4b), on-device inference
-  2. Cloud AI — Google Gemini (gemini-2.5-flash), cloud-based analysis
+  2. Cloud AI — Google Gemini via SDK (google-generativeai)
+  3. Rule-based fallback — deterministic explanation from metrics
 
-Zero external dependencies — stdlib only (urllib, json, threading).
-Both providers run in parallel. Graceful fallback if either is unavailable.
+Both Edge and Cloud providers also run in parallel for the dual-tab UI.
+Graceful fallback if either is unavailable.
 """
 
 import json
@@ -44,8 +45,13 @@ def explain_attack(
     business_impact: dict,
 ) -> dict:
     """
-    Generate AI insights from both Edge and Cloud providers in parallel.
-    Never blocks the simulation — returns fallback messages on failure.
+    Generate AI insights using fallback chain:
+      1. LM Studio (Edge AI)
+      2. Gemini (Cloud AI)
+      3. Rule-based fallback
+
+    Both Edge and Cloud run in parallel to populate their respective UI tabs.
+    The primary summary uses the fallback chain for reliability.
     """
     edge_box: dict = {}
     cloud_box: dict = {}
@@ -66,8 +72,21 @@ def explain_attack(
     edge = edge_box.get("r", _make("LM Studio", _LM_STUDIO_MODEL, error="Edge AI timeout"))
     cloud = cloud_box.get("r", _make("Google Gemini", _GEMINI_MODEL, error="Cloud AI timeout"))
 
-    # Backward compat: use edge insight as primary
-    primary = edge["insight"] if not edge["error"] else ""
+    # ── Fallback chain: LM Studio → Gemini → Rule-based ──────────────────
+    primary = ""
+    primary_error = None
+
+    # 1. Try LM Studio
+    if not edge["error"] and edge["insight"]:
+        primary = edge["insight"]
+    # 2. Fallback to Gemini
+    elif not cloud["error"] and cloud["insight"]:
+        primary = cloud["insight"]
+        primary_error = edge.get("error")  # record why Edge failed
+    # 3. Fallback to rule-based
+    else:
+        primary = _rule_based_fallback(attack_path, risk_score, severity, confidence_score, breach_time)
+        primary_error = f"Edge: {edge.get('error')}; Cloud: {cloud.get('error')}"
 
     return {
         "executive_summary": primary,
@@ -79,7 +98,7 @@ def explain_attack(
         "mitigation_strategy": "",
         "business_impact": "",
         "raw_response": primary,
-        "error": edge.get("error"),
+        "error": primary_error,
         "edge_ai": edge,
         "cloud_ai": cloud,
     }
@@ -138,27 +157,53 @@ def _cloud_ai(attack_path, risk_score, severity, confidence_score, breach_time) 
                       insight="Cloud Intelligence unavailable. GEMINI_API_KEY not configured.")
 
     path_str = " → ".join(attack_path) if attack_path else "N/A"
+
     prompt = (
-        "You are a cybersecurity analyst. "
-        "Generate a concise security insight in 4-8 lines. "
-        "Be direct. No markdown. No bullet points.\n\n"
-        f"Attack path: {path_str}\n"
-        f"Risk score: {risk_score}\n"
-        f"Severity: {severity}\n"
-        f"Confidence: {confidence_score}%\n"
-        f"Estimated breach time: {breach_time}\n\n"
-        "Explain the attack risk, impact, and key mitigation steps briefly."
+     "You are a cybersecurity analyst evaluating a simulated attack path. "
+     "Analyze the attack progression and explain how the attacker moves through the systems. "
+    "Use the exact numerical values provided for risk score, confidence, and breach time. "
+    "Avoid generic cybersecurity advice.\n\n"
+
+    f"Attack path: {path_str}\n"
+    f"Risk score: {risk_score}\n"
+    f"Severity: {severity}\n"
+    f"Confidence: {confidence_score}%\n"
+    f"Estimated breach time: {breach_time}\n\n"
+
+    "Explain how the attacker progresses along this path, which asset becomes exposed, "
+    "and what weakness enables the compromise. "
+    "Mention at least one attack step and one of the provided risk metrics exactly as given. "
+    "Limit the response to 12-14 lines."
     )
 
-    body = json.dumps({
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "temperature": 0.3,
-            "maxOutputTokens": 400,
-            "thinkingConfig": {"thinkingBudget": 0},
-        },
-    }).encode()
+    # ── Try SDK first (google-generativeai) ──────────────────────────────
+    try:
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel(_GEMINI_MODEL)
+        response = model.generate_content(prompt)
+        text = response.text.strip() if response.text else ""
+        if text:
+            return _make("Google Gemini", _GEMINI_MODEL, insight=text)
+        return _make("Google Gemini", _GEMINI_MODEL,
+                      error="Empty response from Gemini SDK",
+                      insight="Cloud AI returned an empty response.")
+    except ImportError:
+        pass  # SDK not installed, fall through to REST API
+    except Exception as sdk_err:
+        # SDK failed, fall through to REST as backup
+        pass
 
+    # ── Fallback: REST API (no SDK dependency) ───────────────────────────
+    body = json.dumps({
+    "contents": [{"parts": [{"text": prompt}]}],
+    "generationConfig": {
+        "temperature": 0.45,
+        "maxOutputTokens": 120,
+        "topP": 0.9,
+        "thinkingConfig": {"thinkingBudget": 0}
+    }
+    }).encode()
     try:
         req = urllib.request.Request(
             f"{_GEMINI_URL}?key={api_key}",
@@ -202,3 +247,39 @@ def _cloud_ai(attack_path, risk_score, severity, confidence_score, breach_time) 
 
 def _make(provider: str, model: str, insight: str = "", error: str | None = None) -> dict:
     return {"insight": insight, "error": error, "provider": provider, "model": model}
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Rule-based fallback (no AI required)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _rule_based_fallback(
+    attack_path: list[str],
+    risk_score: float,
+    severity: str,
+    confidence_score: int,
+    breach_time: str,
+) -> str:
+    """
+    Deterministic explanation built from attack metrics.
+    Used when both LM Studio and Gemini are unavailable.
+    """
+    path_str = " → ".join(attack_path) if attack_path else "N/A"
+    entry = attack_path[0] if attack_path else "unknown entry"
+    target = attack_path[-1] if attack_path else "unknown target"
+    hops = len(attack_path) - 1 if len(attack_path) > 1 else 0
+
+    risk_label = (
+        "critical" if risk_score >= 8 else
+        "high" if risk_score >= 6 else
+        "moderate" if risk_score >= 4 else "low"
+    )
+
+    lines = [
+        f"Attack path: {path_str}",
+        f"The attacker gains initial access through {entry} and reaches {target} in {hops} lateral hop(s).",
+        f"Risk score: {risk_score} ({risk_label}). Severity: {severity}.",
+        f"Estimated breach time: {breach_time} with {confidence_score}% confidence.",
+        f"Recommendation: harden {entry}, segment access to {target}, and reduce exposed services.",
+    ]
+    return "\n".join(lines)

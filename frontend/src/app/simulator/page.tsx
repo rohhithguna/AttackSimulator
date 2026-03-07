@@ -40,7 +40,7 @@ const SimulatorPage: React.FC = () => {
 
           {/* Right Inspector Panel */}
           {showRightPanel && (
-            <div className="w-[320px] shrink-0 border-l border-[#E5E5E5] bg-white overflow-y-auto custom-scrollbar">
+            <div className="w-[320px] shrink-0 border-l border-[#E5E5E5] bg-white overflow-y-auto custom-scrollbar pt-10">
               {/* Infrastructure Health Summary */}
               <div className="p-4 border-b border-[#E5E5E5]">
                 <h4 className="text-[11px] font-semibold text-[#9CA3AF] uppercase tracking-wider mb-3 flex items-center gap-2">

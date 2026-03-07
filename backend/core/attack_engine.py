@@ -34,6 +34,41 @@ VULN_PRIV_ESC_LOW  = "Privilege Escalation via Low-Privilege Account"
 VULN_LATERAL_MOVE  = "Lateral Movement via Internal Trust"
 VULN_EXFIL         = "Data Exfiltration from High-Value Asset"
 
+# Ports considered exploitable for entry
+_EXPLOITABLE_PORTS = {22, 80, 443, 3306, 5432, 8080, 8443, 27017, 1883, 3389, 23}
+
+
+# ---------------------------------------------------------------------------
+# Path validation
+# ---------------------------------------------------------------------------
+
+def validate_attack_path(G: nx.DiGraph, path: list[str]) -> bool:
+    """
+    Validate that a discovered attack path is structurally sound.
+
+    Rules:
+      1. Path must have at least 2 nodes.
+      2. Every consecutive hop (u → v) must correspond to a real edge in G.
+      3. The entry node (path[0]) must have at least one exploitable port.
+
+    Returns True if the path is valid, False otherwise.
+    """
+    if len(path) < 2:
+        return False
+
+    # Rule 1: Every hop must be a real edge
+    for i in range(len(path) - 1):
+        if not G.has_edge(path[i], path[i + 1]):
+            return False
+
+    # Rule 2: Entry node must have exploitable ports
+    entry_node = path[0]
+    entry_ports = set(G.nodes[entry_node].get("open_ports", []))
+    if not entry_ports & _EXPLOITABLE_PORTS:
+        return False
+
+    return True
+
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -62,28 +97,46 @@ def simulate_attack(G: nx.DiGraph, arch: dict) -> dict:
         }
     """
     entry_points = get_entry_points(G)
+    entry_points = entry_points[:5]  # Performance guard: limit entry nodes
     target       = get_highest_value_node(G)
 
     if not entry_points:
         return _empty_result("No public-facing entry points found.")
 
-    # Pick best entry point: highest exposure_score
-    entry = max(
-        entry_points,
-        key=lambda n: G.nodes[n].get("exposure_score", 0)
-    )
+    # ── Evaluate ALL entry points ────────────────────────────────────────
+    # Collect ranked paths from every public-facing entry node, then merge
+    # and re-rank globally so the simulation picks the most dangerous path
+    # regardless of which entry point it originates from.
+    all_ranked: list[list[str]] = []
 
-    # Find all ranked paths (Deterministic Stage 2 logic)
-    ranked = _find_ranked_paths(G, entry, target)
+    for ep in entry_points:
+        paths = _find_ranked_paths(G, ep, target)
+        all_ranked.extend(paths)
 
-    if not ranked:
-        return _empty_result(f"No reachable path from '{entry}' to '{target}'.")
+    # Filter out structurally invalid paths before ranking
+    valid_paths = [p for p in all_ranked if validate_attack_path(G, p)]
 
-    # STAGE 3: Weighted Path Optimization
-    opt_paths = compute_weighted_paths(G, entry, target)
+    if not valid_paths:
+        names = ", ".join(f"'{e}'" for e in entry_points)
+        return _empty_result(f"No valid attack path from any entry point ({names}) to '{target}'.")
+
+    # Re-rank the merged set using the same path_risk scoring
+    def path_risk(path: list[str]) -> float:
+        asset_sum = sum(G.nodes[n].get("asset_value", 1) for n in path)
+        avg_exp   = sum(G.nodes[n].get("exposure_score", 0.1) for n in path) / len(path)
+        max_priv  = max(G.nodes[n].get("privilege_weight", 1.0) for n in path)
+        return asset_sum * avg_exp * max_priv
+
+    ranked = sorted(valid_paths, key=path_risk, reverse=True)
 
     primary_path   = ranked[0]
     secondary_path = ranked[1] if len(ranked) > 1 else []
+
+    # The winning entry point is the start of the primary path
+    entry = primary_path[0]
+
+    # STAGE 3: Weighted Path Optimization (from winning entry)
+    opt_paths = compute_weighted_paths(G, entry, target)
 
     attack_steps, vuln_chain = _build_chain(G, primary_path)
 

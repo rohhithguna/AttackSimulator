@@ -4,18 +4,15 @@ import React from 'react';
 import PremiumLayout from '@/layout/PremiumLayout';
 import SimulationWorkspace from '@/components/Canvas/SimulationWorkspace';
 import NodeConfigPanel from '@/components/Panels/NodeConfigPanel';
-import SimulationResultPanel from '@/components/Panels/SimulationResultPanel';
-import AttackTimeline from '@/components/Panels/AttackTimeline';
+
+import AttackReportView from '@/components/Report/AttackReportView';
 import TopToolbar from '@/components/Toolbar/TopToolbar';
+import FloatingControlBar from '@/components/FloatingControlBar';
 import { useNodeStateStore } from '@/modules/nodeState';
 
 export default function Home() {
   const selectedNodeId = useNodeStateStore((s) => s.selectedNodeId);
-  const simulationResults = useNodeStateStore((s) => s.simulationResults);
-  const isSimulating = useNodeStateStore((s) => s.isSimulating);
-  const timeline = useNodeStateStore((s) => s.timeline);
-
-  const showRightPanel = selectedNodeId || simulationResults || isSimulating || timeline.length > 0;
+  const viewMode = useNodeStateStore((s) => s.viewMode);
 
   return (
     <PremiumLayout>
@@ -25,24 +22,25 @@ export default function Home() {
           <TopToolbar />
         </div>
 
-        {/* Main Area: Canvas + Right Panel */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Canvas */}
+        {/* Main Area: Canvas + Right Panel OR Report View */}
+        <div className="flex-1 flex overflow-hidden relative">
+          {viewMode === 'workspace' && <FloatingControlBar />}
+          {/* Always render canvas in background */}
           <div className="flex-1 relative overflow-hidden min-w-0">
             <SimulationWorkspace />
           </div>
 
-          {/* Right Inspector Panel */}
-          {showRightPanel && (
-            <div className="w-[320px] shrink-0 border-l border-[#E5E5E5] bg-white overflow-y-auto custom-scrollbar">
-              {/* Node Config (shown when a node is selected) */}
+          {/* Right Inspector Panel (Only Node Config in Workspace mode) */}
+          {viewMode === 'workspace' && selectedNodeId && (
+            <div className="w-[320px] shrink-0 border-l border-[#E5E5E5] bg-white overflow-y-auto custom-scrollbar relative z-10">
               <NodeConfigPanel />
+            </div>
+          )}
 
-              {/* Attack Timeline (shown after simulation) */}
-              <AttackTimeline />
-
-              {/* Simulation Results (shown after simulation) */}
-              <SimulationResultPanel />
+          {/* Report View Overlay */}
+          {viewMode === 'report' && (
+            <div className="absolute inset-0 z-20 flex">
+              <AttackReportView />
             </div>
           )}
         </div>

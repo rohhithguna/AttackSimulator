@@ -7,8 +7,10 @@ simulation:
   max_dfs_depth: 12
   max_paths: 500
   path_timeout_seconds: 10
-  monte_carlo_iterations: 1000
+  monte_carlo_iterations: 200
   monte_carlo_iteration_cap: 5000
+  enable_rl_agent: false
+  rl_episodes: 300
 
 risk_model:
   # Exposure base scores for graph_engine (entry exposure computation)

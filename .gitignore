@@ -50,3 +50,4 @@ debug.log
 
 # orchids
 .orchids/
+.env

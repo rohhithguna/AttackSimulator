@@ -27,11 +27,15 @@ export async function POST(req: NextRequest) {
 
   try {
     const parsed = JSON.parse(result as string);
+    if (parsed.error || parsed.status === 'error') {
+      return NextResponse.json(parsed, { status: 500 });
+    }
     return NextResponse.json(parsed);
   } catch {
     return NextResponse.json({ error: "Failed to parse simulation output", raw: result }, { status: 500 });
   }
 }
+
 
 function runPython(scriptPath: string, cwd: string, payload: object): Promise<string> {
   return new Promise<string>((resolve, reject) => {

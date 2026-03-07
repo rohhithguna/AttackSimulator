@@ -29,6 +29,7 @@ from analysis.business_impact import compute_business_impact
 from analysis.ai_explainer    import explain_attack
 from analysis.centrality      import analyze_choke_points
 from analysis.probability     import compute_path_probability, compute_overall_breach_probability, collect_vulnerability_intelligence
+from analysis.attack_surface  import analyze_attack_surface
 from analysis.monte_carlo     import run_monte_carlo
 from analysis.analysis_extensions import (
     generate_attack_timeline, 
@@ -81,6 +82,9 @@ def run_simulation_logic(
             "version": VERSION
         }
 
+    # 2b. Attack Surface Analysis (runs on graph, independent of simulation)
+    attack_surface = analyze_attack_surface(G)
+
     # 3. Path Finding & Primary Simulation
     sim_result = simulate_attack(G, arch)
     
@@ -93,7 +97,7 @@ def run_simulation_logic(
         }
         
         # Minimal valid output even for resilient systems
-        return _build_resilient_response(request_id, VERSION, arch, resilience, start_time_perf)
+        return _build_resilient_response(request_id, VERSION, arch, resilience, start_time_perf, attack_surface)
 
     # 4. Detailed Analysis (Stage 2-3)
     score_result = calculate_risk(G, sim_result)
@@ -122,7 +126,9 @@ def run_simulation_logic(
 
     # Monte Carlo
     if monte_carlo_enabled:
-        monte_carlo_results = run_monte_carlo(G, all_paths, iterations=1000, skill_multiplier=attacker_skill)
+        config = get_config()
+        iterations = config.get("simulation", {}).get("monte_carlo_iterations", 200)
+        monte_carlo_results = run_monte_carlo(G, all_paths, iterations=iterations, skill_multiplier=attacker_skill)
     else:
         monte_carlo_results = {"iterations": 0, "breach_success_rate": 0.0, "average_time_if_successful": "Disabled"}
 
@@ -199,20 +205,25 @@ def run_simulation_logic(
     rl_attacker_data = {
         "rl_attack_path": [],
         "expected_reward": 0.0,
-        "rl_vs_deterministic": "RL simulation not executed."
+        "rl_vs_deterministic": "RL simulation disabled by config."
     }
     
-    try:
-        # Use existing entry point and target for RL training
-        rl_agent = train_rl_agent(G, [sim_result["entry_point"]], sim_result["target"], episodes=300)
-        rl_res = simulate_rl_path(rl_agent, sim_result["entry_point"], sim_result["target"])
-        rl_attacker_data = {
-            "rl_attack_path": rl_res["path"],
-            "expected_reward": rl_res["reward"],
-            "rl_vs_deterministic": compare_rl_vs_deterministic(rl_res["path"], sim_result["attack_path"])
-        }
-    except Exception as e:
-        rl_attacker_data["rl_vs_deterministic"] = f"RL simulation failed: {str(e)}"
+    config = get_config()
+    enable_rl = config.get("simulation", {}).get("enable_rl_agent", False)
+    rl_episodes = config.get("simulation", {}).get("rl_episodes", 300)
+    
+    if enable_rl:
+        try:
+            # Use existing entry point and target for RL training
+            rl_agent = train_rl_agent(G, [sim_result["entry_point"]], sim_result["target"], episodes=rl_episodes)
+            rl_res = simulate_rl_path(rl_agent, sim_result["entry_point"], sim_result["target"])
+            rl_attacker_data = {
+                "rl_attack_path": rl_res["path"],
+                "expected_reward": rl_res["reward"],
+                "rl_vs_deterministic": compare_rl_vs_deterministic(rl_res["path"], sim_result["attack_path"])
+            }
+        except Exception as e:
+            rl_attacker_data["rl_vs_deterministic"] = f"RL simulation failed: {str(e)}"
 
     # 8. Final Output Assembly
     return {
@@ -296,7 +307,10 @@ def run_simulation_logic(
 
         # Infrastructure
         "graph": _serialize_graph(G),
-        "arch": arch
+        "arch": arch,
+
+        # Attack Surface
+        "attack_surface": attack_surface
     }
 
 
@@ -341,7 +355,7 @@ def _fast_sensitivity_analysis(
         "risk_variance": round(results[-1]["risk_score"] - results[0]["risk_score"], 2) if len(results) >= 2 else 0
     }
 
-def _build_resilient_response(request_id, version, arch, resilience, start_time):
+def _build_resilient_response(request_id, version, arch, resilience, start_time, attack_surface=None):
     return {
         "status": "success",
         "request_id": request_id,
@@ -427,7 +441,8 @@ def _build_resilient_response(request_id, version, arch, resilience, start_time)
         },
         "ai_explanation": "No viable attack paths identified.",
         "graph": {"nodes": [], "edges": []},
-        "arch": arch
+        "arch": arch,
+        "attack_surface": attack_surface or {"public_nodes": [], "high_risk_ports": [], "top_exposed_nodes": []}
     }
 
 def _serialize_graph(G):

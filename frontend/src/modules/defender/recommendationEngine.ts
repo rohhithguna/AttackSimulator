@@ -1,8 +1,9 @@
 
 import { Edge } from '@xyflow/react';
 import { InfrastructureNode } from '../nodeState';
+import { estimateRiskReduction } from './riskReductionEstimator';
 
-export type RecommendationType = 
+export type RecommendationType =
   | 'PATCH_VULNERABILITY'
   | 'NETWORK_SEGMENTATION'
   | 'PRIVILEGE_RESTRICTION'
@@ -58,40 +59,46 @@ export const generateRecommendations = (
 
     // Recommendation for high privilege
     if (node.data.privilegeLevel !== 'Low') {
-       recommendations.push({
-          id: `priv_${node.id}`,
-          type: 'PRIVILEGE_RESTRICTION',
-          description: `Restrict privileges on ${node.data.label}`,
-          affectedNodes: [node.id],
-          estimatedRiskReduction: Math.round((freq / pathCount) * 25),
-          actionPayload: { nodeId: node.id, newLevel: 'Low' }
-       });
+      recommendations.push({
+        id: `priv_${node.id}`,
+        type: 'PRIVILEGE_RESTRICTION',
+        description: `Restrict privileges on ${node.data.label}`,
+        affectedNodes: [node.id],
+        estimatedRiskReduction: Math.round((freq / pathCount) * 25),
+        actionPayload: { nodeId: node.id, newLevel: 'Low' }
+      });
     }
 
     // Recommendation for segmentation
     // Find edges where this node is source/target in attack paths
     edges.forEach(edge => {
       if (edge.source === node.id || edge.target === node.id) {
-         // Check if this edge is likely part of an attack path
-         const sourceInPath = nodeFrequencies[edge.source] > 0;
-         const targetInPath = nodeFrequencies[edge.target] > 0;
-         
-         if (sourceInPath && targetInPath) {
-           recommendations.push({
-             id: `seg_${edge.id}`,
-             type: 'NETWORK_SEGMENTATION',
-             description: `Isolate ${node.id === edge.source ? 'target' : 'source'} from ${node.data.label}`,
-             affectedNodes: [edge.source, edge.target],
-             affectedEdges: [edge.id],
-             estimatedRiskReduction: Math.round((Math.min(nodeFrequencies[edge.source], nodeFrequencies[edge.target]) / pathCount) * 50),
-             actionPayload: { edgeId: edge.id }
-           });
-         }
+        // Check if this edge is likely part of an attack path
+        const sourceInPath = nodeFrequencies[edge.source] > 0;
+        const targetInPath = nodeFrequencies[edge.target] > 0;
+
+        if (sourceInPath && targetInPath) {
+          recommendations.push({
+            id: `seg_${edge.id}`,
+            type: 'NETWORK_SEGMENTATION',
+            description: `Isolate ${node.id === edge.source ? 'target' : 'source'} from ${node.data.label}`,
+            affectedNodes: [edge.source, edge.target],
+            affectedEdges: [edge.id],
+            estimatedRiskReduction: Math.round((Math.min(nodeFrequencies[edge.source], nodeFrequencies[edge.target]) / pathCount) * 50),
+            actionPayload: { edgeId: edge.id }
+          });
+        }
       }
     });
   });
 
   // Deduplicate and sort by risk reduction
   const uniqueRecs = recommendations.filter((v, i, a) => a.findIndex(t => t.description === v.description) === i);
-  return uniqueRecs.sort((a, b) => b.estimatedRiskReduction - a.estimatedRiskReduction).slice(0, 5);
+
+  const finalRecs = uniqueRecs.map(rec => ({
+    ...rec,
+    estimatedRiskReduction: estimateRiskReduction(rec, attackPaths, nodes)
+  }));
+
+  return finalRecs.sort((a, b) => b.estimatedRiskReduction - a.estimatedRiskReduction).slice(0, 5);
 };

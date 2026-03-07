@@ -11,6 +11,7 @@ const DashboardPage: React.FC = () => {
   const simulationResults = useNodeStateStore((s) => s.simulationResults);
   const backendResult = useNodeStateStore((s) => s.backendResult);
   const attackPath = useNodeStateStore((s) => s.attackPath);
+  const simulationDirty = useNodeStateStore((s) => s.simulationDirty);
 
   const exposedCount = nodes.filter(n => n.data?.publicExposure).length;
   const compromisedCount = nodes.filter(n => n.data?.compromised).length;
@@ -26,6 +27,16 @@ const DashboardPage: React.FC = () => {
             {hasResults ? 'Showing results from last simulation' : 'Run a simulation to populate dashboard'}
           </p>
         </header>
+
+        {/* Stale simulation warning */}
+        {simulationDirty && (
+          <div className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-5 py-3">
+            <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+            <p className="text-[13px] text-amber-700 font-medium">
+              Simulation results outdated. Run simulation again.
+            </p>
+          </div>
+        )}
 
         {/* Top Stat Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

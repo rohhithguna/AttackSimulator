@@ -2,6 +2,7 @@
 
 import React, { ReactNode } from 'react';
 import LeftNav from '@/components/Navigation/LeftNav';
+import { useNodeStateStore } from '@/modules/nodeState';
 
 interface PremiumLayoutProps {
   children: ReactNode;

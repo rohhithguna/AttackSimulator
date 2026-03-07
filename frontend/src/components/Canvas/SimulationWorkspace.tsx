@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useCallback, useMemo, useRef, memo, useEffect, useState } from 'react';
+
 import {
   ReactFlow,
   MiniMap,
@@ -18,7 +19,8 @@ import InfrastructureNode from '../Nodes/InfrastructureNode';
 import NetworkEdge from './EdgeRenderer';
 import ConnectionPreview from './ConnectionPreview';
 import { useNodeStateStore, type InfrastructureNode as INode } from '../../modules/nodeState';
-import type { InfrastructureNodeType } from '../Nodes/InfrastructureNode';
+import type { InfrastructureNodeType, InfrastructureNodeData } from '../Nodes/InfrastructureNode';
+import { calculateNodeRiskCategory } from '../../utils/calculateNodeRisk';
 
 const nodeTypes = {
   infrastructure: InfrastructureNode,
@@ -55,6 +57,7 @@ const Flow: React.FC = memo(() => {
     onNodesChange,
     onEdgesChange,
     onConnect,
+    selectedNodeId,
     setSelectedNodeId,
     addNode,
     isSimulating,
@@ -62,7 +65,46 @@ const Flow: React.FC = memo(() => {
     pendingConnectionNodeId,
     setPendingConnection,
     addEdgeBetween,
+    backendResult,
+    autoArrange,
+    focusModeEnabled,
+    focusedAttackPath,
+    attackTimelineStep,
+    heatmapEnabled,
+    attackPath,
+    attackPlaybackStep,
+    isPlaying,
+    simulationJustFinished,
+    startPlayback,
+    clearSimulationJustFinished,
+    reportTab,
+    viewMode,
   } = useNodeStateStore();
+
+  // Auto-play once when simulation finishes
+  useEffect(() => {
+    if (simulationJustFinished && attackPath.length > 0) {
+      clearSimulationJustFinished();
+      // Small delay to let the UI settle
+      const t = setTimeout(() => {
+        startPlayback();
+      }, 800);
+      return () => clearTimeout(t);
+    }
+  }, [simulationJustFinished, attackPath.length, clearSimulationJustFinished, startPlayback]);
+
+  const riskStats = useMemo(() => {
+    let high = 0;
+    let critical = 0;
+    if (heatmapEnabled) {
+      nodes.forEach(n => {
+        const risk = calculateNodeRiskCategory(n.data as any);
+        if (risk === 'HIGH') high++;
+        if (risk === 'CRITICAL') critical++;
+      });
+    }
+    return { high, critical };
+  }, [nodes, heatmapEnabled]);
 
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { screenToFlowPosition } = useReactFlow();
@@ -132,6 +174,21 @@ const Flow: React.FC = memo(() => {
     return () => window.removeEventListener('keydown', handler);
   }, [pendingConnectionNodeId, setPendingConnection]);
 
+  /* ── Keyboard Shortcuts ── */
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+
+      if (e.key === 'a' || e.key === 'A') {
+        autoArrange();
+      } else if ((e.key === 'c' || e.key === 'C') && selectedNodeId) {
+        setPendingConnection(selectedNodeId);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [autoArrange, selectedNodeId, setPendingConnection]);
+
   /* ── Track mouse for preview line ── */
   const onMouseMove = useCallback((e: React.MouseEvent) => {
     if (pendingConnectionNodeId && reactFlowWrapper.current) {
@@ -198,7 +255,7 @@ const Flow: React.FC = memo(() => {
   }, [screenToFlowPosition, addNode]);
 
   const defaultEdgeOptions = useMemo(() => ({
-    style: { stroke: '#D1D5DB', strokeWidth: 1.5 },
+    style: { stroke: '#D1D5DB', strokeWidth: 1.5, transition: 'all 0.3s ease' },
     markerEnd: { type: MarkerType.ArrowClosed, color: '#D1D5DB' },
   }), []);
 
@@ -206,7 +263,124 @@ const Flow: React.FC = memo(() => {
     stroke: '#D1D5DB',
     strokeWidth: 1.5,
     strokeDasharray: '6 3',
+    transition: 'all 0.3s ease'
   }), []);
+
+  const renderedNodes = useMemo(() => {
+    if (!focusModeEnabled || !focusedAttackPath) return nodes;
+
+    return nodes.map((node) => {
+      const isPathNode = focusedAttackPath.includes(node.id);
+
+      let opacity = 0.3;
+      if (isPathNode) {
+        if (attackTimelineStep === null) {
+          opacity = 1;
+        } else {
+          const pathIndex = focusedAttackPath.indexOf(node.id);
+          opacity = pathIndex <= attackTimelineStep ? 1 : 0.3;
+        }
+      }
+
+      return {
+        ...node,
+        style: {
+          ...node.style,
+          opacity,
+          transition: 'opacity 0.3s ease',
+        },
+      };
+    });
+  }, [nodes, focusModeEnabled, focusedAttackPath, attackTimelineStep]);
+
+  const renderedEdges = useMemo(() => {
+    return edges.map((edge) => {
+      let label: string | undefined = undefined;
+
+      if (backendResult?.attack_timeline) {
+        const tlStep = backendResult.attack_timeline.find((t: any) => t.node === edge.target);
+        if (tlStep && tlStep.success_probability !== undefined) {
+          label = `${Math.round(tlStep.success_probability * 100)}%`;
+        }
+      } else if (backendResult?.attack_steps) {
+        const step = backendResult.attack_steps.find((s: any) => s.node === edge.target);
+        if (step && (step as any).success_probability) {
+          label = `${Math.round((step as any).success_probability * 100)}%`;
+        }
+      }
+
+      // Playback-aware edge rendering
+      if (attackPlaybackStep >= 0 && attackPath.length > 0) {
+        const sourcePathIdx = attackPath.indexOf(edge.source);
+        const targetPathIdx = attackPath.indexOf(edge.target);
+        const isPlaybackEdge = sourcePathIdx !== -1 && targetPathIdx !== -1 && targetPathIdx === sourcePathIdx + 1;
+        const isReachedEdge = isPlaybackEdge && targetPathIdx <= attackPlaybackStep;
+        const isCurrentEdge = isPlaybackEdge && targetPathIdx === attackPlaybackStep;
+
+        return {
+          ...edge,
+          label,
+          labelBgStyle: { fill: '#fff', fillOpacity: 0.9, color: '#111' },
+          labelStyle: { fill: '#111', fontWeight: 600, fontSize: 10 },
+          data: {
+            ...edge.data,
+            playbackActive: isCurrentEdge,
+          },
+          style: {
+            ...edge.style,
+            stroke: isReachedEdge ? '#DC2626' : '#D1D5DB',
+            strokeWidth: isReachedEdge ? 3 : 1.5,
+            opacity: isPlaybackEdge ? (isReachedEdge ? 1 : 0.3) : 0.2,
+            filter: isCurrentEdge ? 'drop-shadow(0 0 8px rgba(220,38,38,0.5))' : undefined,
+            transition: 'all 0.3s ease',
+          },
+        };
+      }
+
+      if (!focusModeEnabled || !focusedAttackPath) {
+        return {
+          ...edge,
+          label,
+          labelBgStyle: { fill: '#fff', fillOpacity: 0.9, color: '#111' },
+          labelStyle: { fill: '#111', fontWeight: 600, fontSize: 10 }
+        };
+      }
+
+      const sourceIdx = focusedAttackPath.indexOf(edge.source);
+      const targetIdx = focusedAttackPath.indexOf(edge.target);
+      const isPathEdge = sourceIdx !== -1 && targetIdx !== -1 && targetIdx === sourceIdx + 1;
+
+      let opacity = 0.2;
+      let strokeWidth = 1.5;
+      let stroke = '#D1D5DB';
+
+      if (isPathEdge) {
+        if (attackTimelineStep === null) {
+          opacity = 1;
+          strokeWidth = 3;
+          stroke = '#111';
+        } else {
+          opacity = targetIdx <= attackTimelineStep ? 1 : 0.2;
+          strokeWidth = targetIdx <= attackTimelineStep ? 3 : 1.5;
+          stroke = targetIdx <= attackTimelineStep ? '#111' : '#D1D5DB';
+        }
+      }
+
+      return {
+        ...edge,
+        label,
+        labelBgStyle: { fill: '#fff', fillOpacity: 0.9, color: '#111' },
+        labelStyle: { fill: '#111', fontWeight: 600, fontSize: 10 },
+        style: {
+          ...edge.style,
+          stroke,
+          opacity,
+          strokeWidth,
+          transition: 'all 0.3s ease',
+        },
+      };
+    });
+  }, [edges, focusModeEnabled, focusedAttackPath, attackTimelineStep, backendResult, attackPlaybackStep, attackPath]);
 
   return (
     <div
@@ -215,8 +389,8 @@ const Flow: React.FC = memo(() => {
       onMouseMove={onMouseMove}
     >
       <ReactFlow
-        nodes={nodes}
-        edges={edges}
+        nodes={renderedNodes}
+        edges={renderedEdges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
@@ -250,52 +424,105 @@ const Flow: React.FC = memo(() => {
           showInteractive={false}
           position="bottom-left"
         />
-        <MiniMap
-          className="!bg-white !border !border-[#E5E5E5] !right-4 !bottom-4 !rounded-lg overflow-hidden !shadow-sm"
-          maskColor="rgba(255, 255, 255, 0.7)"
-          nodeColor={(n) => {
-            if (n.data.compromised) return '#DC2626';
-            if (n.data.highlighted) return '#DC2626';
-            return '#E5E5E5';
-          }}
-          zoomable
-          pannable
-        />
+        {reportTab !== 'ai' && (
+          <>
+            <MiniMap
+              className="!bg-white !border !border-[#E5E5E5] !right-4 !bottom-4 !rounded-lg overflow-hidden !shadow-sm"
+              maskColor="rgba(255, 255, 255, 0.7)"
+              nodeColor={(n: any) => {
+                if (n.data.isEntry) return '#10B981';
+                if (n.data.isTarget) return '#991B1B';
+                if (n.data.compromised) return '#DC2626';
+                if (n.data.highlighted) return '#DC2626';
+                return '#E5E5E5';
+              }}
+              zoomable
+              pannable
+            />
+          </>
+        )}
 
         {/* Simulation Stats HUD */}
-        <Panel position="top-right" className="m-4">
-          <div className={`px-4 py-3 bg-white border rounded-lg shadow-sm min-w-48 transition-colors ${isSimulating ? 'border-red-200' : 'border-[#E5E5E5]'}`}>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-[11px] font-semibold text-[#9CA3AF] uppercase tracking-wide">Stats</h3>
-              {isSimulating && (
-                <span className="flex items-center gap-1.5 text-[10px] text-[#DC2626] font-medium">
-                  <div className="w-1.5 h-1.5 rounded-full bg-[#DC2626] animate-pulse" /> Running
-                </span>
+        {reportTab !== 'ai' && (
+          <Panel position="top-right" style={{ right: '16px', margin: 0, top: '48px' }}>
+            <div
+              className={`px-4 py-3 min-w-48 transition-colors ${isSimulating ? 'border-red-200' : ''}`}
+              style={{
+                borderRadius: '18px',
+                backdropFilter: 'blur(2px)',
+                WebkitBackdropFilter: 'blur(3px)',
+                background: 'rgba(255,255,255,0.02)',
+                boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
+                border: isSimulating ? '1px solid rgba(220,38,38,0.2)' : '1px solid rgba(255,255,255,0.35)',
+              }}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-[11px] font-semibold text-[#9CA3AF] uppercase tracking-wide">Stats</h3>
+                {isSimulating && (
+                  <span className="flex items-center gap-1.5 text-[10px] text-[#DC2626] font-medium">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#DC2626] animate-pulse" /> Running
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <span className="text-[11px] text-[#9CA3AF]">Nodes</span>
+                  <span className="text-[12px] font-semibold text-[#111] tabular-nums">
+                    {nodes.length}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-[11px] text-[#9CA3AF]">Edges</span>
+                  <span className="text-[12px] font-semibold text-[#111] tabular-nums">
+                    {edges.length}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-[11px] text-[#9CA3AF]">Compromised</span>
+                  <span className={`text-[12px] font-semibold tabular-nums ${nodes.some(n => n.data.compromised) ? 'text-[#DC2626]' : 'text-[#111]'}`}>
+                    {nodes.filter(n => n.data.compromised).length}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-[11px] text-[#9CA3AF]">Entry Points</span>
+                  <span className="text-[12px] font-semibold text-[#111] tabular-nums">
+                    {nodes.filter((n: any) => n.data.publicExposure).length}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-[11px] text-[#9CA3AF]">Critical Assets</span>
+                  <span className="text-[12px] font-semibold text-[#111] tabular-nums">
+                    {nodes.filter((n: any) => (n.data as any).assetValue >= 8).length}
+                  </span>
+                </div>
+
+                {heatmapEnabled && (
+                  <div className="pt-2 mt-2 border-t border-[#E5E5E5] space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[11px] text-[#9CA3AF]">High Risk Nodes</span>
+                      <span className="text-[12px] font-semibold text-[#111] tabular-nums">
+                        {riskStats.high}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-[11px] text-[#9CA3AF]">Critical Nodes</span>
+                      <span className="text-[12px] font-semibold text-[#111] tabular-nums">
+                        {riskStats.critical}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {edges.length < nodes.length - 1 && nodes.length > 1 && (
+                <div className="mt-3 pt-2 border-t border-[#E5E5E5]">
+                  <p className="text-[11px] font-medium text-[#111]">Network may be disconnected</p>
+                </div>
               )}
             </div>
-
-            <div className="space-y-2">
-              <div className="flex justify-between items-center">
-                <span className="text-[11px] text-[#9CA3AF]">Nodes</span>
-                <span className="text-[12px] font-semibold text-[#111] tabular-nums">
-                  {nodes.length}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-[11px] text-[#9CA3AF]">Edges</span>
-                <span className="text-[12px] font-semibold text-[#111] tabular-nums">
-                  {edges.length}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-[11px] text-[#9CA3AF]">Compromised</span>
-                <span className={`text-[12px] font-semibold tabular-nums ${nodes.some(n => n.data.compromised) ? 'text-[#DC2626]' : 'text-[#111]'}`}>
-                  {nodes.filter(n => n.data.compromised).length}
-                </span>
-              </div>
-            </div>
-          </div>
-        </Panel>
+          </Panel>
+        )}
 
         {/* Drop hint when canvas is empty */}
         {nodes.length === 0 && (
@@ -374,7 +601,35 @@ const Flow: React.FC = memo(() => {
         </div>
       )}
 
-      {/* CSS Overrides for ReactFlow controls */}
+      {/* Simulation Summary Banner restored specifically for Workspace tab */}
+      {!isSimulating && backendResult?.primary_path && backendResult.primary_path.length > 0 && viewMode === 'workspace' && (
+        <div
+          className="absolute left-1/2 -translate-x-1/2 z-40 text-center animate-in fade-in slide-in-from-top-4 duration-500 pointer-events-none"
+          style={{
+            top: '52px',
+            padding: '10px 18px',
+            borderRadius: '18px',
+            backdropFilter: 'blur(2px)',
+            WebkitBackdropFilter: 'blur(3px)',
+            background: 'rgba(255,255,255,0.02)',
+            border: '1px solid rgba(255,255,255,0.35)',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.08)',
+            minWidth: '280px',
+            maxWidth: '460px'
+          }}
+        >
+          <p className="text-[13px] font-semibold text-[#111] mb-1">
+            Attack path discovered from <span className="text-[#10B981] font-mono mx-1">{backendResult.primary_path[0]}</span> to <span className="text-[#991B1B] font-mono mx-1">{backendResult.primary_path[backendResult.primary_path.length - 1]}</span>
+          </p>
+          <div className="flex items-center justify-center gap-2 text-[11px] text-[#6B7280]">
+            <span>{backendResult.primary_path.length}-step compromise chain</span>
+            <span>·</span>
+            <span>Estimated breach time: {backendResult.breach_time || 'N/A'}</span>
+          </div>
+        </div>
+      )}
+
+      {/* CSS Overrides for ReactFlow controls + Playback animations */}
       <style jsx global>{`
         .react-flow__handle {
           opacity: 0;
@@ -400,6 +655,58 @@ const Flow: React.FC = memo(() => {
         }
         .react-flow__edge {
           cursor: pointer;
+        }
+
+        /* Playback Entry Node Pulse */
+        .playback-entry-pulse {
+          animation: entryPulse 1.5s ease-in-out infinite;
+        }
+        @keyframes entryPulse {
+          0%, 100% {
+            box-shadow: 0 0 8px rgba(220, 38, 38, 0.3), 0 0 20px rgba(220, 38, 38, 0.1);
+          }
+          50% {
+            box-shadow: 0 0 16px rgba(220, 38, 38, 0.5), 0 0 32px rgba(220, 38, 38, 0.2);
+          }
+        }
+
+        /* Playback Target Node Strong Pulse */
+        .playback-target-pulse {
+          animation: targetPulse 1s ease-in-out infinite;
+        }
+        @keyframes targetPulse {
+          0%, 100% {
+            box-shadow: 0 0 12px rgba(220, 38, 38, 0.4), 0 0 30px rgba(220, 38, 38, 0.15);
+            transform: scale(1);
+          }
+          50% {
+            box-shadow: 0 0 24px rgba(220, 38, 38, 0.6), 0 0 48px rgba(220, 38, 38, 0.25);
+            transform: scale(1.02);
+          }
+        }
+
+        /* Playback Intermediate Node */
+        .playback-intermediate {
+          border-color: #DC2626 !important;
+        }
+
+        /* Playback Step Badge Bounce */
+        .playback-step-badge {
+          animation: stepBadgeBounce 0.4s ease-out;
+        }
+        @keyframes stepBadgeBounce {
+          0% { transform: translateX(-50%) scale(0.5) translateY(-8px); opacity: 0; }
+          60% { transform: translateX(-50%) scale(1.1) translateY(0); opacity: 1; }
+          100% { transform: translateX(-50%) scale(1) translateY(0); opacity: 1; }
+        }
+
+        /* Edge flow animation */
+        .playback-edge-flow {
+          animation: edgeDashFlow 0.6s linear infinite;
+        }
+        @keyframes edgeDashFlow {
+          0% { stroke-dashoffset: 0; }
+          100% { stroke-dashoffset: -20; }
         }
       `}</style>
     </div>

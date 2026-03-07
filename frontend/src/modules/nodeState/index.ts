@@ -26,6 +26,10 @@ export interface ExtendedInfrastructureNodeData extends InfrastructureNodeData {
   assetValue?: number;
   highlighted?: boolean;
   compromised?: boolean;
+  // New properties for attack path visualization
+  isEntry?: boolean;
+  isTarget?: boolean;
+  attackStep?: number;
   [key: string]: unknown;
 }
 
@@ -45,6 +49,7 @@ export interface TimelineStep {
   id: string;
   type: 'Initial Access' | 'Lateral Movement' | 'Privilege Escalation' | 'Target Compromise';
   nodeLabel: string;
+  nodeId?: string;
   timestamp: string;
   details: string;
 }
@@ -69,10 +74,32 @@ interface NodeState {
   attackPath: string[]; // List of node IDs in order
   timeline: TimelineStep[];
   simulationError: string | null;
+  simulationDirty: boolean;
 
-  // Defender State
-  isMitigationActive: boolean;
+  // Playback State
+  attackPlaybackStep: number;
+  isPlaying: boolean;
+  playbackTimerId: ReturnType<typeof setInterval> | null;
+  simulationJustFinished: boolean;
+  _animationTimeouts?: NodeJS.Timeout[];
+
+  // UI state
+  hoveredTimelineNodeId: string | null;
+
+  activeMitigations: Recommendation[];
   recommendations: Recommendation[];
+
+  // Focus Mode State
+  focusedAttackPath: string[] | null;
+  focusModeEnabled: boolean;
+  attackTimelineStep: number | null;
+
+  // View Mode State
+  viewMode: 'workspace' | 'report';
+  reportTab: 'metrics' | 'paths' | 'timeline' | 'defender' | 'ai';
+
+  // Heatmap State
+  heatmapEnabled: boolean;
 
   // Actions
   setNodes: (nodes: InfrastructureNode[]) => void;
@@ -100,7 +127,30 @@ interface NodeState {
 
   // Defender Actions
   applyMitigation: (recommendation: Recommendation) => void;
-  revertMitigation: () => void;
+  removeMitigation: (recommendation: Recommendation) => void;
+  clearMitigations: () => void;
+
+  setHoveredTimelineNodeId: (id: string | null) => void;
+  loadDemoArchitecture: () => void;
+  loadDemoScenario: (name: string) => void;
+
+  setFocusedAttackPath: (path: string[]) => void;
+  toggleFocusMode: () => void;
+  clearFocusedPath: () => void;
+  animateAttackPath: (path: string[]) => void;
+
+  toggleHeatmap: () => void;
+
+  // Playback Actions
+  startPlayback: () => void;
+  pausePlayback: () => void;
+  replayPlayback: () => void;
+  clearSimulationJustFinished: () => void;
+
+  // View Mode Actions
+  setWorkspaceView: () => void;
+  setReportView: () => void;
+  setReportTab: (tab: 'metrics' | 'paths' | 'timeline' | 'defender' | 'ai') => void;
 }
 
 const initialNodes: InfrastructureNode[] = [
@@ -204,6 +254,503 @@ const initialEdges: Edge[] = [
   { id: 'edge-2-4', source: 'node-2', target: 'node-4', type: 'network' },
 ];
 
+/* ── Predefined Demo Scenarios ────────────────────────────── */
+
+interface DemoScenario {
+  name: string;
+  description: string;
+  nodes: InfrastructureNode[];
+  edges: Edge[];
+}
+
+export const DEMO_SCENARIOS: Record<string, DemoScenario> = {
+  'Public Web Breach': {
+    name: 'Public Web Breach',
+    description: 'Basic attack path: Internet → Web Server → App Server → Database',
+    nodes: [
+      {
+        id: 'demo-inet', type: 'infrastructure', position: { x: 50, y: 200 },
+        data: {
+          label: 'internet', type: 'WebServer', ip: '0.0.0.0', ports: ['80', '443'],
+          vulnerabilities: 0, status: 'online', publicExposure: true, privilegeLevel: 'Low',
+          vulnerabilitiesList: [], dataCriticality: 'Low', assetValue: 1,
+        },
+      },
+      {
+        id: 'demo-web', type: 'infrastructure', position: { x: 300, y: 200 },
+        data: {
+          label: 'web', type: 'WebServer', ip: '10.0.1.10', ports: ['80', '443', '22'],
+          vulnerabilities: 2, status: 'online', publicExposure: true, privilegeLevel: 'Low',
+          vulnerabilitiesList: ['CVE-2024-1234', 'CVE-2024-5678'], dataCriticality: 'Low', assetValue: 3,
+        },
+      },
+      {
+        id: 'demo-app', type: 'infrastructure', position: { x: 550, y: 200 },
+        data: {
+          label: 'app', type: 'AppServer', ip: '10.0.2.20', ports: ['8080', '22'],
+          vulnerabilities: 1, status: 'online', publicExposure: false, privilegeLevel: 'Medium',
+          vulnerabilitiesList: ['CVE-2024-9999'], dataCriticality: 'Medium', assetValue: 5,
+        },
+      },
+      {
+        id: 'demo-db', type: 'infrastructure', position: { x: 800, y: 200 },
+        data: {
+          label: 'db', type: 'Database', ip: '10.0.5.100', ports: ['3306'],
+          vulnerabilities: 2, status: 'online', publicExposure: false, privilegeLevel: 'High',
+          vulnerabilitiesList: ['CVE-2023-1111', 'CVE-2023-2222'], dataCriticality: 'High', assetValue: 9,
+        },
+      },
+    ],
+    edges: [
+      { id: 'demo-e1', source: 'demo-inet', target: 'demo-web', type: 'network' },
+      { id: 'demo-e2', source: 'demo-web', target: 'demo-app', type: 'network' },
+      { id: 'demo-e3', source: 'demo-app', target: 'demo-db', type: 'network' },
+    ],
+  },
+
+  'Zero-Trust Segmented Network': {
+    name: 'Zero-Trust Segmented Network',
+    description: 'Segmentation prevents lateral movement: Internet → Web only; App → DB isolated',
+    nodes: [
+      {
+        id: 'demo-inet', type: 'infrastructure', position: { x: 50, y: 150 },
+        data: {
+          label: 'internet', type: 'WebServer', ip: '0.0.0.0', ports: ['80', '443'],
+          vulnerabilities: 0, status: 'online', publicExposure: true, privilegeLevel: 'Low',
+          vulnerabilitiesList: [], dataCriticality: 'Low', assetValue: 1,
+        },
+      },
+      {
+        id: 'demo-web', type: 'infrastructure', position: { x: 300, y: 150 },
+        data: {
+          label: 'web', type: 'WebServer', ip: '10.0.1.10', ports: ['80', '443'],
+          vulnerabilities: 1, status: 'online', publicExposure: true, privilegeLevel: 'Low',
+          vulnerabilitiesList: ['CVE-2024-1234'], dataCriticality: 'Low', assetValue: 3,
+        },
+      },
+      {
+        id: 'demo-app', type: 'infrastructure', position: { x: 300, y: 350 },
+        data: {
+          label: 'app', type: 'AppServer', ip: '10.0.2.20', ports: ['8080'],
+          vulnerabilities: 0, status: 'online', publicExposure: false, privilegeLevel: 'Medium',
+          vulnerabilitiesList: [], dataCriticality: 'Medium', assetValue: 5,
+        },
+      },
+      {
+        id: 'demo-db', type: 'infrastructure', position: { x: 550, y: 350 },
+        data: {
+          label: 'db', type: 'Database', ip: '10.0.5.100', ports: ['5432'],
+          vulnerabilities: 0, status: 'online', publicExposure: false, privilegeLevel: 'High',
+          vulnerabilitiesList: [], dataCriticality: 'High', assetValue: 9,
+        },
+      },
+    ],
+    edges: [
+      { id: 'demo-e1', source: 'demo-inet', target: 'demo-web', type: 'network' },
+      { id: 'demo-e2', source: 'demo-app', target: 'demo-db', type: 'network' },
+    ],
+  },
+
+  'Dual Entry Intrusion': {
+    name: 'Dual Entry Intrusion',
+    description: 'Two attacker entry points: Internet + VPN Gateway',
+    nodes: [
+      {
+        id: 'demo-inet', type: 'infrastructure', position: { x: 50, y: 120 },
+        data: {
+          label: 'internet', type: 'WebServer', ip: '0.0.0.0', ports: ['80', '443'],
+          vulnerabilities: 0, status: 'online', publicExposure: true, privilegeLevel: 'Low',
+          vulnerabilitiesList: [], dataCriticality: 'Low', assetValue: 1,
+        },
+      },
+      {
+        id: 'demo-web', type: 'infrastructure', position: { x: 300, y: 120 },
+        data: {
+          label: 'web', type: 'WebServer', ip: '10.0.1.10', ports: ['80', '443', '22'],
+          vulnerabilities: 2, status: 'online', publicExposure: true, privilegeLevel: 'Low',
+          vulnerabilitiesList: ['CVE-2024-1234', 'CVE-2024-5678'], dataCriticality: 'Low', assetValue: 3,
+        },
+      },
+      {
+        id: 'demo-app', type: 'infrastructure', position: { x: 550, y: 120 },
+        data: {
+          label: 'app', type: 'AppServer', ip: '10.0.2.20', ports: ['8080', '22'],
+          vulnerabilities: 1, status: 'online', publicExposure: false, privilegeLevel: 'Medium',
+          vulnerabilitiesList: ['CVE-2024-9999'], dataCriticality: 'Medium', assetValue: 5,
+        },
+      },
+      {
+        id: 'demo-db', type: 'infrastructure', position: { x: 800, y: 200 },
+        data: {
+          label: 'db', type: 'Database', ip: '10.0.5.100', ports: ['3306'],
+          vulnerabilities: 2, status: 'online', publicExposure: false, privilegeLevel: 'High',
+          vulnerabilitiesList: ['CVE-2023-1111', 'CVE-2023-2222'], dataCriticality: 'High', assetValue: 9,
+        },
+      },
+      {
+        id: 'demo-vpn', type: 'infrastructure', position: { x: 50, y: 320 },
+        data: {
+          label: 'vpn_gateway', type: 'WebServer', ip: '10.0.0.1', ports: ['443', '1194'],
+          vulnerabilities: 1, status: 'online', publicExposure: true, privilegeLevel: 'Medium',
+          vulnerabilitiesList: ['CVE-2024-7777'], dataCriticality: 'Medium', assetValue: 4,
+        },
+      },
+      {
+        id: 'demo-storage', type: 'infrastructure', position: { x: 300, y: 320 },
+        data: {
+          label: 'storage', type: 'Storage', ip: '10.0.6.50', ports: ['22', '445'],
+          vulnerabilities: 1, status: 'online', publicExposure: false, privilegeLevel: 'High',
+          vulnerabilitiesList: ['CVE-2024-8888'], dataCriticality: 'High', assetValue: 8,
+        },
+      },
+    ],
+    edges: [
+      { id: 'demo-e1', source: 'demo-inet', target: 'demo-web', type: 'network' },
+      { id: 'demo-e2', source: 'demo-web', target: 'demo-app', type: 'network' },
+      { id: 'demo-e3', source: 'demo-app', target: 'demo-db', type: 'network' },
+      { id: 'demo-e4', source: 'demo-vpn', target: 'demo-storage', type: 'network' },
+    ],
+  },
+
+  'Exposed Database Crisis': {
+    name: 'Exposed Database Crisis',
+    description: 'Database directly exposed to Internet — critical misconfiguration',
+    nodes: [
+      {
+        id: 'demo-inet', type: 'infrastructure', position: { x: 50, y: 200 },
+        data: {
+          label: 'internet', type: 'WebServer', ip: '0.0.0.0', ports: ['80', '443'],
+          vulnerabilities: 0, status: 'online', publicExposure: true, privilegeLevel: 'Low',
+          vulnerabilitiesList: [], dataCriticality: 'Low', assetValue: 1,
+        },
+      },
+      {
+        id: 'demo-web', type: 'infrastructure', position: { x: 300, y: 100 },
+        data: {
+          label: 'web', type: 'WebServer', ip: '10.0.1.10', ports: ['80', '443', '22'],
+          vulnerabilities: 1, status: 'online', publicExposure: true, privilegeLevel: 'Low',
+          vulnerabilitiesList: ['CVE-2024-1234'], dataCriticality: 'Low', assetValue: 3,
+        },
+      },
+      {
+        id: 'demo-app', type: 'infrastructure', position: { x: 550, y: 100 },
+        data: {
+          label: 'app', type: 'AppServer', ip: '10.0.2.20', ports: ['8080'],
+          vulnerabilities: 1, status: 'online', publicExposure: false, privilegeLevel: 'Medium',
+          vulnerabilitiesList: ['CVE-2024-9999'], dataCriticality: 'Medium', assetValue: 5,
+        },
+      },
+      {
+        id: 'demo-db', type: 'infrastructure', position: { x: 550, y: 320 },
+        data: {
+          label: 'db', type: 'Database', ip: '10.0.5.100', ports: ['3306', '5432'],
+          vulnerabilities: 3, status: 'online', publicExposure: true, privilegeLevel: 'High',
+          vulnerabilitiesList: ['CVE-2023-1111', 'CVE-2023-2222', 'CVE-2023-3333'], dataCriticality: 'High', assetValue: 10,
+        },
+      },
+    ],
+    edges: [
+      { id: 'demo-e1', source: 'demo-inet', target: 'demo-web', type: 'network' },
+      { id: 'demo-e2', source: 'demo-web', target: 'demo-app', type: 'network' },
+      { id: 'demo-e3', source: 'demo-app', target: 'demo-db', type: 'network' },
+      { id: 'demo-e4', source: 'demo-inet', target: 'demo-db', type: 'network' },
+    ],
+  },
+
+  'Cloud Microservice Compromise': {
+    name: 'Cloud Microservice Compromise',
+    description: 'Modern cloud path: Internet → LB → API Gateway → Microservice → Database',
+    nodes: [
+      {
+        id: 'demo-inet', type: 'infrastructure', position: { x: 50, y: 200 },
+        data: {
+          label: 'internet', type: 'WebServer', ip: '0.0.0.0', ports: ['80', '443'],
+          vulnerabilities: 0, status: 'online', publicExposure: true, privilegeLevel: 'Low',
+          vulnerabilitiesList: [], dataCriticality: 'Low', assetValue: 1,
+        },
+      },
+      {
+        id: 'demo-lb', type: 'infrastructure', position: { x: 250, y: 200 },
+        data: {
+          label: 'load_balancer', type: 'WebServer', ip: '10.0.0.5', ports: ['80', '443'],
+          vulnerabilities: 0, status: 'online', publicExposure: true, privilegeLevel: 'Low',
+          vulnerabilitiesList: [], dataCriticality: 'Low', assetValue: 2,
+        },
+      },
+      {
+        id: 'demo-apigw', type: 'infrastructure', position: { x: 450, y: 200 },
+        data: {
+          label: 'api_gateway', type: 'AppServer', ip: '10.0.1.10', ports: ['443', '8443'],
+          vulnerabilities: 1, status: 'online', publicExposure: false, privilegeLevel: 'Medium',
+          vulnerabilitiesList: ['CVE-2024-4444'], dataCriticality: 'Medium', assetValue: 4,
+        },
+      },
+      {
+        id: 'demo-svc', type: 'infrastructure', position: { x: 650, y: 200 },
+        data: {
+          label: 'microservice', type: 'AppServer', ip: '10.0.2.30', ports: ['8080', '9090'],
+          vulnerabilities: 2, status: 'online', publicExposure: false, privilegeLevel: 'Medium',
+          vulnerabilitiesList: ['CVE-2024-5555', 'CVE-2024-6666'], dataCriticality: 'Medium', assetValue: 6,
+        },
+      },
+      {
+        id: 'demo-db', type: 'infrastructure', position: { x: 850, y: 200 },
+        data: {
+          label: 'db', type: 'Database', ip: '10.0.5.100', ports: ['5432'],
+          vulnerabilities: 1, status: 'online', publicExposure: false, privilegeLevel: 'High',
+          vulnerabilitiesList: ['CVE-2023-1111'], dataCriticality: 'High', assetValue: 9,
+        },
+      },
+    ],
+    edges: [
+      { id: 'demo-e1', source: 'demo-inet', target: 'demo-lb', type: 'network' },
+      { id: 'demo-e2', source: 'demo-lb', target: 'demo-apigw', type: 'network' },
+      { id: 'demo-e3', source: 'demo-apigw', target: 'demo-svc', type: 'network' },
+      { id: 'demo-e4', source: 'demo-svc', target: 'demo-db', type: 'network' },
+    ],
+  },
+
+  'Insider Workstation Breach': {
+    name: 'Insider Workstation Breach',
+    description: 'Insider threat: Workstation → App Server → Database → SIEM',
+    nodes: [
+      {
+        id: 'demo-ws', type: 'infrastructure', position: { x: 50, y: 200 },
+        data: {
+          label: 'workstation', type: 'Workstation', ip: '10.0.10.5', ports: ['3389', '445'],
+          vulnerabilities: 1, status: 'online', publicExposure: true, privilegeLevel: 'Low',
+          vulnerabilitiesList: ['CVE-2024-2001'], dataCriticality: 'Low', assetValue: 2,
+        },
+      },
+      {
+        id: 'demo-app', type: 'infrastructure', position: { x: 300, y: 200 },
+        data: {
+          label: 'app', type: 'AppServer', ip: '10.0.2.20', ports: ['8080', '22'],
+          vulnerabilities: 1, status: 'online', publicExposure: false, privilegeLevel: 'Medium',
+          vulnerabilitiesList: ['CVE-2024-9999'], dataCriticality: 'Medium', assetValue: 5,
+        },
+      },
+      {
+        id: 'demo-db', type: 'infrastructure', position: { x: 550, y: 200 },
+        data: {
+          label: 'db', type: 'Database', ip: '10.0.5.100', ports: ['3306'],
+          vulnerabilities: 2, status: 'online', publicExposure: false, privilegeLevel: 'High',
+          vulnerabilitiesList: ['CVE-2023-1111', 'CVE-2023-2222'], dataCriticality: 'High', assetValue: 9,
+        },
+      },
+      {
+        id: 'demo-siem', type: 'infrastructure', position: { x: 800, y: 200 },
+        data: {
+          label: 'siem', type: 'SIEM', ip: '10.0.8.10', ports: ['514'],
+          vulnerabilities: 0, status: 'online', publicExposure: false, privilegeLevel: 'High',
+          vulnerabilitiesList: [], dataCriticality: 'High', assetValue: 8,
+        },
+      },
+    ],
+    edges: [
+      { id: 'demo-e1', source: 'demo-ws', target: 'demo-app', type: 'network' },
+      { id: 'demo-e2', source: 'demo-app', target: 'demo-db', type: 'network' },
+      { id: 'demo-e3', source: 'demo-db', target: 'demo-siem', type: 'network' },
+    ],
+  },
+
+  'VPN Lateral Movement': {
+    name: 'VPN Lateral Movement',
+    description: 'VPN entry with lateral movement: VPN → App → DB → Storage',
+    nodes: [
+      {
+        id: 'demo-vpn', type: 'infrastructure', position: { x: 50, y: 200 },
+        data: {
+          label: 'vpn_gateway', type: 'VPN', ip: '10.0.0.1', ports: ['443', '1194'],
+          vulnerabilities: 1, status: 'online', publicExposure: true, privilegeLevel: 'Medium',
+          vulnerabilitiesList: ['CVE-2024-7777'], dataCriticality: 'Medium', assetValue: 4,
+        },
+      },
+      {
+        id: 'demo-app', type: 'infrastructure', position: { x: 300, y: 200 },
+        data: {
+          label: 'app', type: 'AppServer', ip: '10.0.2.20', ports: ['8080', '22'],
+          vulnerabilities: 1, status: 'online', publicExposure: false, privilegeLevel: 'Medium',
+          vulnerabilitiesList: ['CVE-2024-9999'], dataCriticality: 'Medium', assetValue: 5,
+        },
+      },
+      {
+        id: 'demo-db', type: 'infrastructure', position: { x: 550, y: 200 },
+        data: {
+          label: 'db', type: 'Database', ip: '10.0.5.100', ports: ['5432'],
+          vulnerabilities: 1, status: 'online', publicExposure: false, privilegeLevel: 'High',
+          vulnerabilitiesList: ['CVE-2023-1111'], dataCriticality: 'High', assetValue: 9,
+        },
+      },
+      {
+        id: 'demo-storage', type: 'infrastructure', position: { x: 800, y: 200 },
+        data: {
+          label: 'storage', type: 'Storage', ip: '10.0.6.50', ports: ['22', '445'],
+          vulnerabilities: 0, status: 'online', publicExposure: false, privilegeLevel: 'High',
+          vulnerabilitiesList: [], dataCriticality: 'High', assetValue: 8,
+        },
+      },
+    ],
+    edges: [
+      { id: 'demo-e1', source: 'demo-vpn', target: 'demo-app', type: 'network' },
+      { id: 'demo-e2', source: 'demo-app', target: 'demo-db', type: 'network' },
+      { id: 'demo-e3', source: 'demo-db', target: 'demo-storage', type: 'network' },
+    ],
+  },
+
+  'Load Balanced Web Infrastructure': {
+    name: 'Load Balanced Web Infrastructure',
+    description: 'Internet → Load Balancer → Web → App → Database',
+    nodes: [
+      {
+        id: 'demo-inet', type: 'infrastructure', position: { x: 50, y: 200 },
+        data: {
+          label: 'internet', type: 'WebServer', ip: '0.0.0.0', ports: ['80', '443'],
+          vulnerabilities: 0, status: 'online', publicExposure: true, privilegeLevel: 'Low',
+          vulnerabilitiesList: [], dataCriticality: 'Low', assetValue: 1,
+        },
+      },
+      {
+        id: 'demo-lb', type: 'infrastructure', position: { x: 250, y: 200 },
+        data: {
+          label: 'load_balancer', type: 'LoadBalancer', ip: '10.0.0.5', ports: ['80', '443'],
+          vulnerabilities: 0, status: 'online', publicExposure: true, privilegeLevel: 'Low',
+          vulnerabilitiesList: [], dataCriticality: 'Low', assetValue: 2,
+        },
+      },
+      {
+        id: 'demo-web', type: 'infrastructure', position: { x: 450, y: 200 },
+        data: {
+          label: 'web', type: 'WebServer', ip: '10.0.1.10', ports: ['80', '443', '22'],
+          vulnerabilities: 2, status: 'online', publicExposure: false, privilegeLevel: 'Low',
+          vulnerabilitiesList: ['CVE-2024-1234', 'CVE-2024-5678'], dataCriticality: 'Low', assetValue: 3,
+        },
+      },
+      {
+        id: 'demo-app', type: 'infrastructure', position: { x: 650, y: 200 },
+        data: {
+          label: 'app', type: 'AppServer', ip: '10.0.2.20', ports: ['8080'],
+          vulnerabilities: 1, status: 'online', publicExposure: false, privilegeLevel: 'Medium',
+          vulnerabilitiesList: ['CVE-2024-9999'], dataCriticality: 'Medium', assetValue: 5,
+        },
+      },
+      {
+        id: 'demo-db', type: 'infrastructure', position: { x: 850, y: 200 },
+        data: {
+          label: 'db', type: 'Database', ip: '10.0.5.100', ports: ['3306'],
+          vulnerabilities: 1, status: 'online', publicExposure: false, privilegeLevel: 'High',
+          vulnerabilitiesList: ['CVE-2023-1111'], dataCriticality: 'High', assetValue: 9,
+        },
+      },
+    ],
+    edges: [
+      { id: 'demo-e1', source: 'demo-inet', target: 'demo-lb', type: 'network' },
+      { id: 'demo-e2', source: 'demo-lb', target: 'demo-web', type: 'network' },
+      { id: 'demo-e3', source: 'demo-web', target: 'demo-app', type: 'network' },
+      { id: 'demo-e4', source: 'demo-app', target: 'demo-db', type: 'network' },
+    ],
+  },
+
+  'IoT Network Pivot': {
+    name: 'IoT Network Pivot',
+    description: 'IoT device as entry: IoT → Router → App Server → Database',
+    nodes: [
+      {
+        id: 'demo-iot', type: 'infrastructure', position: { x: 50, y: 200 },
+        data: {
+          label: 'iot_device', type: 'IoTDevice', ip: '10.0.20.5', ports: ['1883', '80'],
+          vulnerabilities: 2, status: 'online', publicExposure: true, privilegeLevel: 'Low',
+          vulnerabilitiesList: ['CVE-2024-3001', 'CVE-2024-3002'], dataCriticality: 'Low', assetValue: 1,
+        },
+      },
+      {
+        id: 'demo-router', type: 'infrastructure', position: { x: 300, y: 200 },
+        data: {
+          label: 'router', type: 'Router', ip: '10.0.0.1', ports: ['23', '80'],
+          vulnerabilities: 1, status: 'online', publicExposure: false, privilegeLevel: 'Medium',
+          vulnerabilitiesList: ['CVE-2024-4001'], dataCriticality: 'Medium', assetValue: 4,
+        },
+      },
+      {
+        id: 'demo-app', type: 'infrastructure', position: { x: 550, y: 200 },
+        data: {
+          label: 'app', type: 'AppServer', ip: '10.0.2.20', ports: ['8080', '22'],
+          vulnerabilities: 1, status: 'online', publicExposure: false, privilegeLevel: 'Medium',
+          vulnerabilitiesList: ['CVE-2024-9999'], dataCriticality: 'Medium', assetValue: 5,
+        },
+      },
+      {
+        id: 'demo-db', type: 'infrastructure', position: { x: 800, y: 200 },
+        data: {
+          label: 'db', type: 'Database', ip: '10.0.5.100', ports: ['3306'],
+          vulnerabilities: 1, status: 'online', publicExposure: false, privilegeLevel: 'High',
+          vulnerabilitiesList: ['CVE-2023-1111'], dataCriticality: 'High', assetValue: 9,
+        },
+      },
+    ],
+    edges: [
+      { id: 'demo-e1', source: 'demo-iot', target: 'demo-router', type: 'network' },
+      { id: 'demo-e2', source: 'demo-router', target: 'demo-app', type: 'network' },
+      { id: 'demo-e3', source: 'demo-app', target: 'demo-db', type: 'network' },
+    ],
+  },
+
+  'Monitoring Bypass Attack': {
+    name: 'Monitoring Bypass Attack',
+    description: 'Attack path with monitoring: Web → App → DB → SIEM, App → IDS',
+    nodes: [
+      {
+        id: 'demo-web', type: 'infrastructure', position: { x: 50, y: 200 },
+        data: {
+          label: 'web', type: 'WebServer', ip: '10.0.1.10', ports: ['80', '443', '22'],
+          vulnerabilities: 2, status: 'online', publicExposure: true, privilegeLevel: 'Low',
+          vulnerabilitiesList: ['CVE-2024-1234', 'CVE-2024-5678'], dataCriticality: 'Low', assetValue: 3,
+        },
+      },
+      {
+        id: 'demo-app', type: 'infrastructure', position: { x: 300, y: 150 },
+        data: {
+          label: 'app', type: 'AppServer', ip: '10.0.2.20', ports: ['8080', '22'],
+          vulnerabilities: 1, status: 'online', publicExposure: false, privilegeLevel: 'Medium',
+          vulnerabilitiesList: ['CVE-2024-9999'], dataCriticality: 'Medium', assetValue: 5,
+        },
+      },
+      {
+        id: 'demo-db', type: 'infrastructure', position: { x: 550, y: 150 },
+        data: {
+          label: 'db', type: 'Database', ip: '10.0.5.100', ports: ['3306'],
+          vulnerabilities: 2, status: 'online', publicExposure: false, privilegeLevel: 'High',
+          vulnerabilitiesList: ['CVE-2023-1111', 'CVE-2023-2222'], dataCriticality: 'High', assetValue: 9,
+        },
+      },
+      {
+        id: 'demo-ids', type: 'infrastructure', position: { x: 300, y: 350 },
+        data: {
+          label: 'ids_ips', type: 'IDS', ip: '10.0.9.10', ports: [],
+          vulnerabilities: 0, status: 'online', publicExposure: false, privilegeLevel: 'High',
+          vulnerabilitiesList: [], dataCriticality: 'High', assetValue: 6,
+        },
+      },
+      {
+        id: 'demo-siem', type: 'infrastructure', position: { x: 800, y: 150 },
+        data: {
+          label: 'siem', type: 'SIEM', ip: '10.0.8.10', ports: ['514'],
+          vulnerabilities: 0, status: 'online', publicExposure: false, privilegeLevel: 'High',
+          vulnerabilitiesList: [], dataCriticality: 'High', assetValue: 8,
+        },
+      },
+    ],
+    edges: [
+      { id: 'demo-e1', source: 'demo-web', target: 'demo-app', type: 'network' },
+      { id: 'demo-e2', source: 'demo-app', target: 'demo-db', type: 'network' },
+      { id: 'demo-e3', source: 'demo-db', target: 'demo-siem', type: 'network' },
+      { id: 'demo-e4', source: 'demo-app', target: 'demo-ids', type: 'network' },
+    ],
+  },
+};
+
+export const DEMO_SCENARIO_NAMES = Object.keys(DEMO_SCENARIOS);
+
 export const useNodeStateStore = create<NodeState>((set, get) => ({
   nodes: initialNodes,
   edges: initialEdges,
@@ -221,9 +768,25 @@ export const useNodeStateStore = create<NodeState>((set, get) => ({
   attackPath: [],
   timeline: [],
   simulationError: null,
+  simulationDirty: false,
 
-  isMitigationActive: false,
+  attackPlaybackStep: -1,
+  isPlaying: false,
+  playbackTimerId: null,
+  simulationJustFinished: false,
+  hoveredTimelineNodeId: null,
+
+  activeMitigations: [],
   recommendations: [],
+
+  focusedAttackPath: null,
+  focusModeEnabled: false,
+  attackTimelineStep: null,
+
+  viewMode: 'workspace',
+  reportTab: 'metrics',
+
+  heatmapEnabled: false,
 
   setNodes: (nodes) => set({ nodes }),
   setEdges: (edges) => set({ edges }),
@@ -253,6 +816,84 @@ export const useNodeStateStore = create<NodeState>((set, get) => ({
   setSelectedNodeId: (id) => set({ selectedNodeId: id }),
 
   setPendingConnection: (id) => set({ pendingConnectionNodeId: id }),
+
+  setFocusedAttackPath: (path) => set({ focusedAttackPath: path, focusModeEnabled: true, attackTimelineStep: null }),
+  toggleFocusMode: () => set((state) => {
+    if (!state.focusModeEnabled && state.focusedAttackPath === null && state.backendResult?.paths?.length) {
+      // Auto-select top path if enabling focus mode without one
+      return { focusModeEnabled: true, focusedAttackPath: state.backendResult.paths[0] };
+    }
+    return { focusModeEnabled: !state.focusModeEnabled };
+  }),
+  clearFocusedPath: () => set({ focusedAttackPath: null, focusModeEnabled: false, attackTimelineStep: null }),
+  animateAttackPath: (path) => {
+    set({ focusedAttackPath: path, focusModeEnabled: true, attackTimelineStep: 0 });
+    let step = 0;
+    const interval = setInterval(() => {
+      step++;
+      if (step >= path.length) {
+        clearInterval(interval);
+      } else {
+        useNodeStateStore.setState({ attackTimelineStep: step });
+      }
+    }, 600);
+  },
+
+  toggleHeatmap: () => set((state) => ({ heatmapEnabled: !state.heatmapEnabled })),
+
+  startPlayback: () => {
+    const { attackPath, isPlaying, playbackTimerId, attackPlaybackStep } = get();
+    if (attackPath.length === 0 || isPlaying) return;
+
+    // If already at the end, start from beginning
+    const startStep = attackPlaybackStep >= attackPath.length - 1 ? 0 : attackPlaybackStep + 1;
+    set({ attackPlaybackStep: startStep === 0 ? 0 : attackPlaybackStep, isPlaying: true });
+
+    let step = startStep;
+    if (startStep === 0) {
+      set({ attackPlaybackStep: 0 });
+      step = 1;
+    }
+
+    const timer = setInterval(() => {
+      const { attackPath: currentPath } = get();
+      if (step >= currentPath.length) {
+        clearInterval(timer);
+        useNodeStateStore.setState({ isPlaying: false, playbackTimerId: null });
+        return;
+      }
+      useNodeStateStore.setState({ attackPlaybackStep: step });
+      step++;
+    }, 600);
+
+    set({ playbackTimerId: timer });
+  },
+
+  pausePlayback: () => {
+    const { playbackTimerId } = get();
+    if (playbackTimerId) {
+      clearInterval(playbackTimerId);
+    }
+    set({ isPlaying: false, playbackTimerId: null });
+  },
+
+  replayPlayback: () => {
+    const { playbackTimerId } = get();
+    if (playbackTimerId) {
+      clearInterval(playbackTimerId);
+    }
+    set({ attackPlaybackStep: -1, isPlaying: false, playbackTimerId: null });
+    // Start fresh after a small delay
+    setTimeout(() => {
+      get().startPlayback();
+    }, 50);
+  },
+
+  clearSimulationJustFinished: () => set({ simulationJustFinished: false }),
+
+  setWorkspaceView: () => set({ viewMode: 'workspace' }),
+  setReportView: () => set({ viewMode: 'report' }),
+  setReportTab: (tab) => set({ reportTab: tab }),
 
   addEdgeBetween: (sourceId, targetId) => {
     // Validate: no self-loop
@@ -286,6 +927,8 @@ export const useNodeStateStore = create<NodeState>((set, get) => ({
     });
   },
 
+  setHoveredTimelineNodeId: (id) => set({ hoveredTimelineNodeId: id }),
+
   runSimulation: async () => {
     if (get().isSimulating) return;
 
@@ -296,6 +939,17 @@ export const useNodeStateStore = create<NodeState>((set, get) => ({
       return;
     }
 
+    if (edges.length === 0) {
+      set({ simulationError: 'Add at least 1 connection between nodes to run a simulation.' });
+      return;
+    }
+
+    const hasPublicFacing = nodes.some(n => n.data.publicExposure === true);
+    if (!hasPublicFacing) {
+      set({ simulationError: 'At least one node must be public-facing to simulate an attack entry point.' });
+      return;
+    }
+
     // Clear previous results and reset visual state
     set({
       isSimulating: true,
@@ -303,6 +957,7 @@ export const useNodeStateStore = create<NodeState>((set, get) => ({
       timeline: [],
       simulationResults: null,
       backendResult: null,
+      simulationDirty: false,
       simulationError: null,
       nodes: nodes.map(n => ({ ...n, data: { ...n.data, highlighted: false, compromised: false } })),
       edges: edges.map(e => ({ ...e, animated: false, style: undefined })),
@@ -322,6 +977,17 @@ export const useNodeStateStore = create<NodeState>((set, get) => ({
           attacker_skill: 1.0,
         }),
       });
+
+      // Instead of ignoring HTTP status codes, check ok first
+      if (!res.ok) {
+        let errorMsg = `Server error: ${res.status}`;
+        try {
+          const errData = await res.json();
+          if (errData.error) errorMsg = errData.error;
+        } catch (_) { }
+        set({ isSimulating: false, simulationError: errorMsg });
+        return;
+      }
 
       const data = await res.json();
 
@@ -345,6 +1011,7 @@ export const useNodeStateStore = create<NodeState>((set, get) => ({
             : i === (result.attack_steps || []).length - 1 ? 'Target Compromise' as const
               : 'Lateral Movement' as const,
         nodeLabel: step.node || `Step ${i + 1}`,
+        nodeId: step.node ? nameToId[step.node] : undefined,
         timestamp: result.breach_time_data?.breakdown?.[i]
           ? `${result.breach_time_data.breakdown[i].adjusted_minutes}m`
           : `${(i + 1) * 15}m`,
@@ -353,22 +1020,29 @@ export const useNodeStateStore = create<NodeState>((set, get) => ({
           : `${step.step_type} on ${step.node} (${step.permission} privilege)`,
       }));
 
+      // Tracking timeouts to clear them if simulation resets
+      const animationTimeouts: NodeJS.Timeout[] = [];
+
       // Animate attack path overlay
       let currentPath: string[] = [];
       attackPathIds.forEach((nodeId, index) => {
-        setTimeout(() => {
+        const t = setTimeout(() => {
           currentPath = [...currentPath, nodeId];
 
           set({
             attackPath: currentPath,
             nodes: get().nodes.map(node => {
               const inPath = currentPath.includes(node.id);
+              const stepIndex = currentPath.indexOf(node.id);
               return {
                 ...node,
                 data: {
                   ...node.data,
                   highlighted: inPath,
                   compromised: inPath,
+                  isEntry: inPath && node.id === attackPathIds[0],
+                  isTarget: inPath && node.id === attackPathIds[attackPathIds.length - 1],
+                  attackStep: inPath ? stepIndex + 1 : undefined,
                 }
               };
             }),
@@ -402,10 +1076,22 @@ export const useNodeStateStore = create<NodeState>((set, get) => ({
               simulationResults,
               backendResult: result,
               recommendations: recs,
+              simulationJustFinished: true,
             });
+
+            const rt = setTimeout(() => {
+              if (get().viewMode !== 'report') {
+                set({ viewMode: 'report', reportTab: 'metrics' });
+              }
+            }, 5000);
+            get()._animationTimeouts?.push(rt);
           }
         }, (index + 1) * 600);
+        animationTimeouts.push(t);
       });
+
+      // Save to store so resetSimulation can access them
+      set({ _animationTimeouts: animationTimeouts });
 
       // If no attack path found, still set results
       if (attackPathIds.length === 0) {
@@ -420,6 +1106,13 @@ export const useNodeStateStore = create<NodeState>((set, get) => ({
           },
           backendResult: result,
         });
+
+        const defaultPathTimeout = setTimeout(() => {
+          if (get().viewMode !== 'report') {
+            set({ viewMode: 'report', reportTab: 'metrics' });
+          }
+        }, 5000);
+        set({ _animationTimeouts: [defaultPathTimeout] });
       }
 
     } catch (err: any) {
@@ -431,6 +1124,11 @@ export const useNodeStateStore = create<NodeState>((set, get) => ({
   },
 
   resetSimulation: () => {
+    const { playbackTimerId, _animationTimeouts } = get();
+    if (playbackTimerId) clearInterval(playbackTimerId);
+    if (_animationTimeouts) {
+      _animationTimeouts.forEach(t => clearTimeout(t));
+    }
     set({
       isSimulating: false,
       simulationResults: null,
@@ -438,12 +1136,19 @@ export const useNodeStateStore = create<NodeState>((set, get) => ({
       attackPath: [],
       timeline: [],
       simulationError: null,
+      attackPlaybackStep: -1,
+      isPlaying: false,
+      playbackTimerId: null,
+      simulationJustFinished: false,
       nodes: get().nodes.map(node => ({
         ...node,
         data: {
           ...node.data,
           highlighted: false,
           compromised: false,
+          isEntry: false,
+          isTarget: false,
+          attackStep: undefined,
         }
       })),
       edges: get().edges.map(edge => ({
@@ -451,8 +1156,11 @@ export const useNodeStateStore = create<NodeState>((set, get) => ({
         animated: false,
         style: undefined
       })),
-      isMitigationActive: false,
-      recommendations: []
+      activeMitigations: [],
+      recommendations: [],
+      originalNodes: null,
+      originalEdges: null,
+      originalRiskScore: null,
     });
   },
 
@@ -466,15 +1174,42 @@ export const useNodeStateStore = create<NodeState>((set, get) => ({
     if (nodes.length === 0) return;
     const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
     g.setGraph({ rankdir: 'TB', nodesep: 80, ranksep: 120 });
-    nodes.forEach((node) => g.setNode(node.id, { width: 200, height: 100 }));
+    nodes.forEach((node) => g.setNode(node.id, { width: 220, height: 120 }));
     edges.forEach((edge) => g.setEdge(edge.source, edge.target));
     Dagre.layout(g);
     set({
       nodes: nodes.map((node) => {
         const pos = g.node(node.id);
-        return { ...node, position: { x: pos.x - 100, y: pos.y - 50 } };
+        return { ...node, position: { x: pos.x - 110, y: pos.y - 60 } };
       }),
     });
+  },
+
+  loadDemoArchitecture: () => {
+    set({ nodes: initialNodes, edges: initialEdges });
+    get().resetSimulation();
+    get().autoArrange();
+  },
+
+  loadDemoScenario: (name: string) => {
+    const scenario = DEMO_SCENARIOS[name];
+    if (!scenario) {
+      console.warn(`[loadDemoScenario] Unknown scenario: "${name}". Available: ${DEMO_SCENARIO_NAMES.join(', ')}`);
+      return;
+    }
+
+    // Deep-clone to avoid mutating the definitions
+    const scenarioNodes = JSON.parse(JSON.stringify(scenario.nodes)) as InfrastructureNode[];
+    const scenarioEdges = JSON.parse(JSON.stringify(scenario.edges)) as Edge[];
+
+    // Reset graph and simulation state, then load scenario
+    set({
+      nodes: scenarioNodes,
+      edges: scenarioEdges,
+      selectedNodeId: null,
+    });
+    get().resetSimulation();
+    get().autoArrange();
   },
 
   resetCanvas: () => {
@@ -486,7 +1221,7 @@ export const useNodeStateStore = create<NodeState>((set, get) => ({
     if (!get().simulationResults) return;
 
     // Backup current state if not already active
-    if (!get().isMitigationActive) {
+    if (get().activeMitigations.length === 0) {
       set({
         originalNodes: JSON.parse(JSON.stringify(get().nodes)),
         originalEdges: JSON.parse(JSON.stringify(get().edges)),
@@ -494,38 +1229,71 @@ export const useNodeStateStore = create<NodeState>((set, get) => ({
       });
     }
 
+    // Check if already applied
+    if (get().activeMitigations.some(m => m.id === recommendation.id)) return;
+
+    const newMitigations = [...get().activeMitigations, recommendation];
+
     const result = simulateMitigation(
-      get().nodes,
-      get().edges,
-      recommendation,
-      get().simulationResults?.riskScore || 0
+      get().originalNodes || get().nodes,
+      get().originalEdges || get().edges,
+      newMitigations,
+      get().originalRiskScore || get().simulationResults?.riskScore || 0
     );
 
     set({
       nodes: result.newNodes,
       edges: result.newEdges,
-      isMitigationActive: true,
-      simulationResults: {
-        ...get().simulationResults!,
-        riskScore: result.riskAfter
-      }
+      activeMitigations: newMitigations,
+      simulationResults: null,
+      backendResult: null,
+      attackPath: [],
+      simulationDirty: true,
     });
   },
 
-  revertMitigation: () => {
-    if (!get().isMitigationActive || !get().originalNodes || !get().originalEdges) return;
+  removeMitigation: (recommendation) => {
+    if (get().activeMitigations.length === 0 || !get().originalNodes || !get().originalEdges) return;
+
+    const newMitigations = get().activeMitigations.filter(m => m.id !== recommendation.id);
+
+    if (newMitigations.length === 0) {
+      get().clearMitigations();
+      return;
+    }
+
+    const result = simulateMitigation(
+      get().originalNodes!,
+      get().originalEdges!,
+      newMitigations,
+      get().originalRiskScore || get().simulationResults?.riskScore || 0
+    );
+
+    set({
+      nodes: result.newNodes,
+      edges: result.newEdges,
+      activeMitigations: newMitigations,
+      simulationResults: null,
+      backendResult: null,
+      attackPath: [],
+      simulationDirty: true,
+    });
+  },
+
+  clearMitigations: () => {
+    if (get().activeMitigations.length === 0 || !get().originalNodes || !get().originalEdges) return;
 
     set({
       nodes: get().originalNodes!,
       edges: get().originalEdges!,
-      isMitigationActive: false,
-      simulationResults: {
-        ...get().simulationResults!,
-        riskScore: get().originalRiskScore || 0
-      },
+      activeMitigations: [],
+      simulationResults: null,
+      backendResult: null,
+      attackPath: [],
       originalNodes: null,
       originalEdges: null,
-      originalRiskScore: null
+      originalRiskScore: null,
+      simulationDirty: true,
     });
   }
 }));
